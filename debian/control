@@ -1,0 +1,52 @@
+Source: lz-disk-cleaner
+Section: utils
+Priority: optional
+Maintainer: LZ Disk Cleaner Team <support@lz-disk-cleaner.org>
+Build-Depends: cmake (>= 3.16),
+               debhelper-compat (= 13),
+               qt6-base-dev (>= 6.2),
+               qt6-base-dev-tools (>= 6.2),
+               libqt6core6 (>= 6.2),
+               libqt6gui6 (>= 6.2),
+               libqt6widgets6 (>= 6.2),
+               libqt6network6 (>= 6.2),
+               libgl1-mesa-dev | libgl-dev,
+               libegl1-mesa-dev | libegl-dev,
+               pkg-config
+Standards-Version: 4.6.2
+Homepage: https://github.com/lz-disk-cleaner
+Vcs-Git: https://github.com/lz-disk-cleaner.git
+Vcs-Browser: https://github.com/lz-disk-cleaner
+
+Package: lz-disk-cleaner
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         policykit-1,
+         psmisc,
+         lsof
+Description: Disk cleaning and optimization tool
+ LZ Disk Cleaner is a comprehensive disk cleaning and system
+ optimization tool.
+ .
+ Features:
+  - Disk usage analysis with visual charts
+  - System cache and temporary file cleaning
+  - Package cache cleaning (APT, Linglong)
+  - System log cleanup
+  - File shredder with secure deletion
+  - System slimming and optimization
+  - Real-time resource monitoring
+  - Linglong application management
+ .
+ This tool helps users reclaim disk space and maintain system
+ performance with an intuitive and user-friendly interface.
+
+Package: lz-disk-cleaner-dbg
+Architecture: any
+Section: debug
+Depends: lz-disk-cleaner (= ${binary:Version}),
+         ${misc:Depends}
+Description: Debug symbols for lz-disk-cleaner
+ This package contains the debug symbols for lz-disk-cleaner,
+ useful for debugging and development purposes.

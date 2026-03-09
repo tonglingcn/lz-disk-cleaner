@@ -1,0 +1,24 @@
+[Desktop Entry]
+Version=1.0
+Name=Deepin Disk Cleaner
+Name[zh_CN]=深度磁盘清理
+Name[zh_TW]=深度磁碟清理
+GenericName=Disk Cleaner
+GenericName[zh_CN]=磁盘清理工具
+GenericName[zh_TW]=磁碟清理工具
+Comment=Clean up disk space and optimize system performance
+Comment[zh_CN]=清理磁盘空间并优化系统性能
+Comment[zh_TW]=清理磁碟空間並優化系統性能
+Exec=/usr/bin/lz-disk-cleaner
+Icon=lz-disk-cleaner
+Terminal=false
+Type=Application
+Categories=System;FileTools;Qt;
+Keywords=disk;clean;cache;optimizer;system;
+Keywords[zh_CN]=磁盘;清理;缓存;优化;系统;
+Keywords[zh_TW]=磁碟;清理;快取;優化;系統;
+StartupNotify=true
+StartupWMClass=lz-disk-cleaner
+X-Deepin-ManualID=lz-disk-cleaner
+X-Deepin-Vendor=deepin
+X-Deepin-Turbowise=false

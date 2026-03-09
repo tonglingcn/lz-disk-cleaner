@@ -1,0 +1,29 @@
+lz-disk-cleaner for Debian
+-------------------------
+
+This package contains the LZ Disk Cleaner application,
+a comprehensive disk cleaning and system optimization tool.
+
+Building from source:
+--------------------
+apt build-dep lz-disk-cleaner
+dpkg-buildpackage -us -uc
+
+Or using debuild:
+debuild -us -uc
+
+Required runtime dependencies:
+-----------------------------
+- policykit-1: For privilege escalation
+- psmisc: For process management
+- lsof: For checking file locks
+
+Configuration files:
+------------------
+User configuration is stored in:
+~/.config/lz-disk-cleaner/
+
+Log files are stored in:
+~/.cache/lz-disk-cleaner/logs/
+
+ -- LZ Disk Cleaner Team <support@lz-disk-cleaner.org>  Sun, 09 Mar 2026

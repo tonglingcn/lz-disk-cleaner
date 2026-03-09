@@ -1,0 +1,21 @@
+# Debian package build output
+/*.debhelper.log
+/*.debhelper
+/*.substvars
+/debhelper-build-stamp
+/files
+/deepin-disk-cleaner/
+/deepin-disk-cleaner-dbg/
+/tmp/
+
+# Source package build output
+/*.tar.gz
+/*.tar.xz
+/*.dsc
+/*.changes
+/*.buildinfo
+/*.build
+
+# Backup files
+*~
+*.bak

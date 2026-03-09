@@ -1,0 +1,62 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export QT_SELECT := qt6
+
+# 获取并行编译数
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+%:
+	dh $@ --buildsystem=cmake
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_VERBOSE_MAKEFILE=ON
+
+override_dh_auto_build:
+	dh_auto_build
+
+override_dh_auto_install:
+	dh_auto_install
+
+# 安装额外的文件
+override_dh_install:
+	dh_install
+	# 安装 desktop 文件
+	mkdir -p debian/lz-disk-cleaner/usr/share/applications
+	install -m 644 debian/lz-disk-cleaner.desktop \
+		debian/lz-disk-cleaner/usr/share/applications/
+	# 安装图标
+	mkdir -p debian/lz-disk-cleaner/usr/share/icons/hicolor/scalable/apps
+	install -m 644 resources/icons/app_icon.svg \
+		debian/lz-disk-cleaner/usr/share/icons/hicolor/scalable/apps/lz-disk-cleaner.svg
+	# 安装文档
+	mkdir -p debian/lz-disk-cleaner/usr/share/doc/lz-disk-cleaner
+	install -m 644 README.md debian/lz-disk-cleaner/usr/share/doc/lz-disk-cleaner/
+	# 确保 helper 程序有正确的权限
+	chmod 755 debian/lz-disk-cleaner/usr/bin/lz-disk-cleaner-helper
+
+# 处理 PolicyKit 策略文件
+override_dh_installpam:
+	dh_installpam
+
+override_dh_missing:
+	dh_missing --fail-missing
+
+# 压缩 changelog 和文档
+override_dh_compress:
+	dh_compress -X.md -X.txt
+
+# 清理构建目录
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf build

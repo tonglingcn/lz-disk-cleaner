@@ -1,0 +1,17 @@
+lz-disk-cleaner (1.0.0-1) unstable; urgency=medium
+
+  * Initial release.
+  * Features:
+    - Disk usage analysis with visual pie charts
+    - System cache and temporary file cleaning
+    - APT package cache cleaning
+    - Linglong application management and uninstall
+    - System log cleanup (system logs, journal logs, crash reports)
+    - File shredder with secure multi-pass deletion
+    - System slimming and optimization
+    - Real-time resource monitoring (CPU, Memory, Network)
+    - Support for stubborn file deletion with privilege elevation
+    - Dark/Light theme support
+    - Chinese and English localization
+
+ -- LZ Disk Cleaner Team <support@lz-disk-cleaner.org>  Sun, 09 Mar 2026 19:00:00 +0800

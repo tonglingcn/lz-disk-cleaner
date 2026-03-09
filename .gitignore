@@ -1,0 +1,54 @@
+# Build directories
+build/
+test_build/
+obj-*/
+
+# IDE and editor
+.codebuddy/
+.vscode/
+.idea/
+*.pro.user
+*.autosave
+
+# Compiled files
+*.o
+*.obj
+*.moc
+*.moc.cpp
+*_automoc.cpp
+*.qm
+
+# Libraries
+*.a
+*.lib
+*.so
+*.so.*
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Debian packaging
+*.deb
+*.changes
+*.buildinfo
+*.dsc
+*.tar.*
+debian/lz-disk-cleaner/
+debian/lz-disk-cleaner-dbg/
+debian/*.substvars
+debian/files
+debian/tmp/
+
+# Logs and temporary
+*.log
+*~
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
