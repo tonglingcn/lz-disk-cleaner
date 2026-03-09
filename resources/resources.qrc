@@ -7,13 +7,5 @@
         <file>icons/cleanup.svg</file>
         <file>icons/settings.svg</file>
         <file>icons/about.svg</file>
-        
-        <!-- Styles -->
-        <file>styles/dark.qss</file>
-        <file>styles/light.qss</file>
-        
-        <!-- Translations -->
-        <file>translations/deepin-disk-cleaner_zh_CN.qm</file>
-        <file>translations/deepin-disk-cleaner_en_US.qm</file>
     </qresource>
 </RCC>
