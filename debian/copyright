@@ -1,18 +1,18 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: lz-disk-cleaner
-Upstream-Contact: LZ Disk Cleaner Team <support@lz-disk-cleaner.org>
-Source: https://github.com/lz-disk-cleaner
+Upstream-Contact: tonglingcn <315707022@qq.com>
+Source: https://github.com/tonglingcn/lz-disk-cleaner
 
 Files: *
-Copyright: 2025-2026 LZ Disk Cleaner Team
+Copyright: 2025-2026 tonglingcn
 License: GPL-3.0+
 
 Files: src/helper/*
-Copyright: 2025-2026 LZ Disk Cleaner Team
+Copyright: 2025-2026 tonglingcn
 License: GPL-3.0+
 
 Files: resources/*
-Copyright: 2025-2026 LZ Disk Cleaner Team
+Copyright: 2025-2026 tonglingcn
 License: GPL-3.0+
 
 License: GPL-3.0+

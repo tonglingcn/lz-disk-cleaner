@@ -1,6 +1,6 @@
-# Deepin 磁盘清理工具 (Deepin Disk Cleaner)
+# LZ 磁盘清理工具 (LZ Disk Cleaner)
 
-一个专为 Deepin V25 系统设计的磁盘清理工具，采用 C++17 + Qt6 开发。
+一个专为 Deepin/Debian 系统设计的磁盘清理工具，采用 C++17 + Qt6 开发。
 
 ## 功能特性
 
@@ -196,18 +196,19 @@ GPL-3.0
 
 ## 作者
 
-Deepin (深度) 操作系统团队
+tonglingcn (克亮)
 
 ## 致谢
 
 - Qt 框架开发团队
 - Deepin 社区
+- Stacer 项目 (资源监控模块参考)
 
 ## 联系方式
 
-- 项目主页: https://github.com/deepin/deepin-disk-cleaner
-- 问题反馈: https://github.com/deepin/deepin-disk-cleaner/issues
+- 项目主页: https://github.com/tonglingcn/lz-disk-cleaner
+- 问题反馈: https://github.com/tonglingcn/lz-disk-cleaner/issues
 
 ---
 
-**注意**: 本工具专为 Deepin V25 系统设计，在其他系统上使用可能无法正常工作。
+**注意**: 本工具专为 Deepin/Debian 系统设计，在其他系统上使用可能无法正常工作。
