@@ -1,7 +1,7 @@
 Source: lz-disk-cleaner
 Section: utils
 Priority: optional
-Maintainer: tonglingcn <315707022@qq.com>
+Maintainer: 克亮 <315707022@qq.com>
 Build-Depends: cmake (>= 3.16),
                debhelper-compat (= 13),
                qt6-base-dev (>= 6.2),

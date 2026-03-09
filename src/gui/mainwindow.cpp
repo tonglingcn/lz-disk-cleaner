@@ -223,7 +223,7 @@ void MainWindow::createMenuBar()
     
     // 文件菜单
     QMenu *fileMenu = menuBar->addMenu(tr("文件(&F)"));
-    QAction *exitAction = fileMenu->addAction(tr("退出(&X)"), this, &QWidget::close, QKeySequence::Quit);
+    QAction *exitAction = fileMenu->addAction(tr("退出(&X)"), QKeySequence::Quit, this, &QWidget::close);
     exitAction->setIcon(QIcon(":/icons/about.svg"));
     
     // 工具菜单
@@ -467,7 +467,7 @@ void MainWindow::onAboutClicked()
            "<li>系统瘦身</li>"
            "</ul>"
            "<p><b>技术栈：</b> C++17 + Qt6</p>"
-           "<p>Copyright © 2025-2026 tonglingcn</p>")
+           "<p>Copyright © 2026 克亮</p>")
     );
 }
 

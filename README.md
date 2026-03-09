@@ -202,7 +202,6 @@ tonglingcn (克亮)
 
 - Qt 框架开发团队
 - Deepin 社区
-- Stacer 项目 (资源监控模块参考)
 
 ## 联系方式
 

@@ -1,0 +1,43 @@
+name: Build Debian Package
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          qt6-base-dev \
+          qt6-tools-dev \
+          libqt6charts6-dev \
+          libqt6svg6-dev \
+          debhelper \
+          dh-python
+
+    - name: Build debian package
+      run: |
+        dpkg-buildpackage -us -uc -b
+
+    - name: Move deb package
+      run: |
+        mv ../*.deb .
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: lz-disk-cleaner-deb
+        path: ./*.deb
