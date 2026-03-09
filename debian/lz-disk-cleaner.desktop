@@ -1,8 +1,8 @@
 [Desktop Entry]
 Version=1.0
-Name=Deepin Disk Cleaner
-Name[zh_CN]=深度磁盘清理
-Name[zh_TW]=深度磁碟清理
+Name=LZ Disk Cleaner
+Name[zh_CN]=LZ磁盘清理
+Name[zh_TW]=LZ磁碟清理
 GenericName=Disk Cleaner
 GenericName[zh_CN]=磁盘清理工具
 GenericName[zh_TW]=磁碟清理工具
@@ -20,5 +20,5 @@ Keywords[zh_TW]=磁碟;清理;快取;優化;系統;
 StartupNotify=true
 StartupWMClass=lz-disk-cleaner
 X-Deepin-ManualID=lz-disk-cleaner
-X-Deepin-Vendor=deepin
+X-Deepin-Vendor=lz
 X-Deepin-Turbowise=false

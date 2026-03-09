@@ -1,8 +1,8 @@
 /*
- * Deepin Disk Cleaner Helper - 权限提升删除工具
+ * LZ Disk Cleaner Helper - 权限提升删除工具
  * 通过 PolicyKit (pkexec) 调用执行需要 root 权限的删除操作
  * 
- * Copyright (C) 2026 Deepin Disk Cleaner Team
+ * Copyright (C) 2025-2026 tonglingcn
  */
 
 #include <QCoreApplication>
@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
     app.setApplicationVersion("1.0.0");
     
     QCommandLineParser parser;
-    parser.setApplicationDescription("Deepin Disk Cleaner Helper - Execute privileged cleanup operations");
+    parser.setApplicationDescription("LZ Disk Cleaner Helper - Execute privileged cleanup operations");
     parser.addHelpOption();
     parser.addVersionOption();
     

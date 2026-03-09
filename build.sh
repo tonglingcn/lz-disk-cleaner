@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Deepin Disk Cleaner - Build Script
-# Deepin 磁盘清理工具 - 编译脚本
+# LZ Disk Cleaner - Build Script
+# LZ 磁盘清理工具 - 编译脚本
 
 set -e
 
 echo "========================================"
-echo "  Deepin Disk Cleaner Build Script  "
+echo "  LZ Disk Cleaner Build Script  "
 echo "========================================"
 echo ""
 
@@ -61,11 +61,11 @@ echo ""
 # 完成
 echo -e "${YELLOW}[5/5] 构建完成！${NC}"
 echo ""
-echo "可执行文件位置: build/bin/DeepinDiskCleaner"
+echo "可执行文件位置: build/bin/lz-disk-cleaner"
 echo ""
 echo "运行程序:"
 echo "  cd build"
-echo "  ./bin/DeepinDiskCleaner"
+echo "  ./bin/lz-disk-cleaner"
 echo ""
 echo "安装到系统:"
 echo "  cd build"
