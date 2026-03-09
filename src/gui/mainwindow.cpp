@@ -56,7 +56,7 @@ MainWindow::~MainWindow()
 void MainWindow::initUI()
 {
     // 设置窗口属性
-    setWindowTitle(tr("LZ磁盘清理工具"));
+    setWindowTitle(tr("磁盘清理工具-Deepin版"));
     setMinimumSize(900, 700);
     resize(1100, 800);
     
@@ -453,9 +453,9 @@ void MainWindow::onAboutClicked()
     LOG_INFO("About button clicked");
     QMessageBox::about(
         this,
-        tr("关于 LZ磁盘清理工具"),
-        tr("<h3>LZ磁盘清理工具 v1.0.0</h3>"
-           "<p>一个专为 Deepin/Debian 系统设计的磁盘清理工具。</p>"
+        tr("关于 磁盘清理工具-Deepin版"),
+        tr("<h3>磁盘清理工具-Deepin版 v1.0.0</h3>"
+           "<p>一个专为 Deepin V25 系统设计的磁盘清理工具。</p>"
            "<p><b>功能特性：</b></p>"
            "<ul>"
            "<li>磁盘使用分析</li>"
