@@ -7,5 +7,6 @@
         <file>icons/cleanup.svg</file>
         <file>icons/settings.svg</file>
         <file>icons/about.svg</file>
+        <file>icons/check.svg</file>
     </qresource>
 </RCC>

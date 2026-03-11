@@ -24,9 +24,9 @@ HistoryChart::HistoryChart(const QString &title, int seriesCount, QWidget *paren
     , m_yMax(100)
     , m_maxHistory(60)
     , m_leftMargin(60)
-    , m_rightMargin(180)
+    , m_rightMargin(20)
     , m_topMargin(30)
-    , m_bottomMargin(40)
+    , m_bottomMargin(60)  // 基础底部边距
 {
     initColors();
     
@@ -38,10 +38,23 @@ HistoryChart::HistoryChart(const QString &title, int seriesCount, QWidget *paren
         m_seriesList.append(series);
     }
     
-    setMinimumHeight(180);
+    // 根据系列数量动态计算底部边距和最小高度
+    // 估算每行大约能放的项目数（基于平均项目宽度约100px）
+    int estimatedItemsPerRow = qMax(4, seriesCount <= 8 ? seriesCount : 8);
+    int estimatedRows = (seriesCount + estimatedItemsPerRow - 1) / estimatedItemsPerRow;
+    
+    // 每行图例约18px高度，加上额外的padding
+    int legendHeight = estimatedRows * 18 + 15;
+    m_bottomMargin = qMax(60, legendHeight);
+    
+    // 基础高度 + 图例区域高度
+    int minH = m_topMargin + 130 + m_bottomMargin;
+    setMinimumHeight(minH);
+    
     setStyleSheet("background-color: white; border: 1px solid #bdc3c7; border-radius: 6px;");
     
-    LOG_DEBUG(QString("HistoryChart created: %1, series: %2").arg(title).arg(seriesCount));
+    LOG_DEBUG(QString("HistoryChart created: %1, series: %2, estimatedRows: %3, minHeight: %4")
+        .arg(title).arg(seriesCount).arg(estimatedRows).arg(minH));
 }
 
 HistoryChart::~HistoryChart()
@@ -98,6 +111,20 @@ void HistoryChart::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
     
+    // 动态计算图例需要的行数，确保有足够空间
+    int legendAreaWidth = width() - m_leftMargin - m_rightMargin;
+    int neededRows = calculateLegendRows(legendAreaWidth);
+    int neededBottomMargin = neededRows * 18 + 20;
+    
+    // 如果当前高度不够，动态调整最小高度
+    if (neededBottomMargin > m_bottomMargin) {
+        m_bottomMargin = neededBottomMargin;
+        int minH = m_topMargin + 130 + m_bottomMargin;
+        if (height() < minH) {
+            setMinimumHeight(minH);
+        }
+    }
+    
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     
@@ -112,7 +139,7 @@ void HistoryChart::paintEvent(QPaintEvent *event)
     painter.setPen(QColor("#2c3e50"));
     painter.drawText(QRect(10, 5, width() - 20, 25), Qt::AlignLeft | Qt::AlignVCenter, m_title);
     
-    // 计算图表区域
+    // 计算图表区域（右侧边距减小，底部留出空间给图例）
     QRectF chartRect(m_leftMargin, m_topMargin, 
                      width() - m_leftMargin - m_rightMargin, 
                      height() - m_topMargin - m_bottomMargin);
@@ -120,11 +147,62 @@ void HistoryChart::paintEvent(QPaintEvent *event)
     // 绘制网格
     drawGrid(painter, chartRect);
     
-    // 绘制数据曲线
-    drawSeries(painter, chartRect);
+    // 绘制数据曲线并返回曲线末端位置
+    QVector<QPointF> endPoints = drawSeries(painter, chartRect);
     
-    // 绘制图例
-    drawLegend(painter, chartRect);
+    // 在底部绘制图例（曲线末端下方）
+    drawLegend(painter, chartRect, endPoints);
+}
+
+int HistoryChart::calculateLegendRows(int legendAreaWidth) const
+{
+    if (m_seriesList.isEmpty()) return 0;
+    
+    QFont font;
+    font.setPointSize(9);
+    QFontMetrics fm(font);
+    
+    int textOffset = 10 + 5;  // colorBoxSize + spacing
+    int totalWidth = 0;
+    
+    for (const DataSeries &series : m_seriesList) {
+        QString text = series.name.isEmpty() ? 
+            QString("%1").arg(series.currentValue, 0, 'f', 1) : series.name;
+        int w = fm.horizontalAdvance(text) + textOffset + 15;
+        totalWidth += w;
+    }
+    
+    if (totalWidth <= legendAreaWidth) {
+        return 1;
+    }
+    
+    // 计算需要的行数，尽量均匀分布
+    int totalItems = m_seriesList.size();
+    
+    // 先计算最少需要的行数
+    int minRows = 1;
+    int testWidth = 0;
+    int itemsInCurrentRow = 0;
+    QVector<int> itemWidths;
+    
+    for (const DataSeries &series : m_seriesList) {
+        QString text = series.name.isEmpty() ? 
+            QString("%1").arg(series.currentValue, 0, 'f', 1) : series.name;
+        itemWidths.append(fm.horizontalAdvance(text) + textOffset + 15);
+    }
+    
+    for (int i = 0; i < totalItems; ++i) {
+        if (testWidth + itemWidths[i] > legendAreaWidth && itemsInCurrentRow > 0) {
+            minRows++;
+            testWidth = itemWidths[i];
+            itemsInCurrentRow = 1;
+        } else {
+            testWidth += itemWidths[i];
+            itemsInCurrentRow++;
+        }
+    }
+    
+    return minRows;
 }
 
 void HistoryChart::drawGrid(QPainter &painter, const QRectF &chartRect)
@@ -167,19 +245,25 @@ void HistoryChart::drawGrid(QPainter &painter, const QRectF &chartRect)
     painter.setFont(font);
     painter.setPen(QColor("#7f8c8d"));
     painter.drawText(QRectF(chartRect.left(), chartRect.bottom() + 5, 
-                           chartRect.width(), 20), 
+                           chartRect.width(), 15), 
                     Qt::AlignCenter, tr("时间 (秒)"));
 }
 
-void HistoryChart::drawSeries(QPainter &painter, const QRectF &chartRect)
+QVector<QPointF> HistoryChart::drawSeries(QPainter &painter, const QRectF &chartRect)
 {
+    QVector<QPointF> endPoints;
+    
     for (const DataSeries &series : m_seriesList) {
-        if (series.values.isEmpty()) continue;
+        if (series.values.isEmpty()) {
+            endPoints.append(QPointF(chartRect.right(), chartRect.bottom()));
+            continue;
+        }
         
         // 创建路径
         QPainterPath path;
         bool first = true;
-        double lastX = 0;
+        double lastX = chartRect.right();
+        double lastY = chartRect.bottom();
         
         for (int i = 0; i < series.values.size(); ++i) {
             double px = chartRect.right() - (chartRect.width() * i / (m_maxHistory - 1));
@@ -194,7 +278,11 @@ void HistoryChart::drawSeries(QPainter &painter, const QRectF &chartRect)
                 path.lineTo(px, py);
             }
             lastX = px;
+            lastY = py;
         }
+        
+        // 记录曲线末端位置（最新数据点）
+        endPoints.append(QPointF(lastX, lastY));
         
         // 绘制曲线
         painter.setPen(QPen(series.color, 2));
@@ -212,37 +300,159 @@ void HistoryChart::drawSeries(QPainter &painter, const QRectF &chartRect)
             fillColor.setAlpha(30);
             painter.fillPath(fillPath, fillColor);
         }
+        
+        // 在曲线末端绘制小圆点
+        painter.setBrush(series.color);
+        painter.setPen(QPen(Qt::white, 1));
+        painter.drawEllipse(endPoints.last(), 4, 4);
     }
+    
+    return endPoints;
 }
 
-void HistoryChart::drawLegend(QPainter &painter, const QRectF &chartRect)
+void HistoryChart::drawLegend(QPainter &painter, const QRectF &chartRect, const QVector<QPointF> &endPoints)
 {
+    if (m_seriesList.isEmpty()) return;
+    
     QFont font = painter.font();
     font.setPointSize(9);
     painter.setFont(font);
+    QFontMetrics fm(font);
     
-    int legendY = m_topMargin;
-    int legendX = chartRect.right() + 10;
+    int legendAreaTop = chartRect.bottom() + 18;
+    int legendAreaLeft = m_leftMargin;
+    int legendAreaWidth = width() - m_leftMargin - m_rightMargin;
     
+    int colorBoxSize = 10;
+    int textOffset = colorBoxSize + 5;
+    int legendItemHeight = 18;
+    
+    int totalItems = m_seriesList.size();
+    
+    // 计算每个图例项的实际宽度
+    QVector<int> itemWidths;
+    int totalWidth = 0;
     for (const DataSeries &series : m_seriesList) {
-        // 绘制颜色方块
-        painter.fillRect(legendX, legendY + 2, 12, 12, series.color);
+        QString text = series.name.isEmpty() ? 
+            QString("%1").arg(series.currentValue, 0, 'f', 1) : series.name;
+        int w = fm.horizontalAdvance(text) + textOffset + 15;  // 颜色块 + 文本 + 间距
+        itemWidths.append(w);
+        totalWidth += w;
+    }
+    
+    // 改进的布局算法：尽量均匀分布
+    int rows = 1;
+    int itemsPerRow = totalItems;
+    
+    if (totalWidth > legendAreaWidth) {
+        // 计算最少需要的行数
+        int minRows = 1;
+        int testWidth = 0;
+        int itemsInCurrentRow = 0;
         
-        // 绘制名称
-        painter.setPen(QColor("#2c3e50"));
-        QString displayText = series.name;
-        if (displayText.isEmpty()) {
-            displayText = QString("%1").arg(series.currentValue, 0, 'f', 1);
+        for (int i = 0; i < totalItems; ++i) {
+            if (testWidth + itemWidths[i] > legendAreaWidth && itemsInCurrentRow > 0) {
+                // 当前行放不下，换行
+                minRows++;
+                testWidth = itemWidths[i];
+                itemsInCurrentRow = 1;
+            } else {
+                testWidth += itemWidths[i];
+                itemsInCurrentRow++;
+            }
         }
         
-        // 截断过长的文本
-        QFontMetrics fm(font);
-        int maxWidth = m_rightMargin - 20;
-        if (fm.horizontalAdvance(displayText) > maxWidth) {
-            displayText = fm.elidedText(displayText, Qt::ElideRight, maxWidth);
+        rows = minRows;
+        
+        // 计算均匀分布时每行的项目数
+        // 尽量让每行项目数相等或相差不超过1
+        itemsPerRow = (totalItems + rows - 1) / rows;  // 向上取整
+        
+        // 验证这个分布是否可行（每行宽度是否超限）
+        bool valid = true;
+        int rowWidth = 0;
+        int itemCount = 0;
+        for (int i = 0; i < totalItems; ++i) {
+            rowWidth += itemWidths[i];
+            itemCount++;
+            if (itemCount >= itemsPerRow || i == totalItems - 1) {
+                if (rowWidth > legendAreaWidth) {
+                    valid = false;
+                    break;
+                }
+                rowWidth = 0;
+                itemCount = 0;
+            }
         }
         
-        painter.drawText(legendX + 16, legendY + 12, displayText);
-        legendY += 18;
+        // 如果不可行，增加行数重试
+        while (!valid && rows < totalItems) {
+            rows++;
+            itemsPerRow = (totalItems + rows - 1) / rows;
+            valid = true;
+            rowWidth = 0;
+            itemCount = 0;
+            for (int i = 0; i < totalItems; ++i) {
+                rowWidth += itemWidths[i];
+                itemCount++;
+                if (itemCount >= itemsPerRow || i == totalItems - 1) {
+                    if (rowWidth > legendAreaWidth) {
+                        valid = false;
+                        break;
+                    }
+                    rowWidth = 0;
+                    itemCount = 0;
+                }
+            }
+        }
+    }
+    
+    // 绘制图例
+    int itemIndex = 0;
+    for (int row = 0; row < rows && itemIndex < totalItems; ++row) {
+        // 计算当前行的项目范围
+        int startIdx = row * itemsPerRow;
+        int endIdx = qMin(startIdx + itemsPerRow, totalItems);
+        int itemCountInRow = endIdx - startIdx;
+        
+        // 计算当前行所有项的总宽度
+        int rowWidth = 0;
+        for (int i = startIdx; i < endIdx; ++i) {
+            rowWidth += itemWidths[i];
+        }
+        
+        // 计算间距（居中两端对齐）
+        int spacing = 0;
+        int startX = legendAreaLeft;
+        if (itemCountInRow > 1) {
+            spacing = (legendAreaWidth - rowWidth) / (itemCountInRow - 1);
+            // 确保间距不为负
+            spacing = qMax(0, spacing);
+        } else {
+            // 单项居中
+            startX = legendAreaLeft + (legendAreaWidth - rowWidth) / 2;
+        }
+        
+        int currentX = startX;
+        int itemY = legendAreaTop + row * legendItemHeight;
+        
+        for (int i = startIdx; i < endIdx; ++i) {
+            const DataSeries &series = m_seriesList[i];
+            
+            // 绘制颜色方块
+            painter.fillRect(currentX, itemY + 2, colorBoxSize, colorBoxSize, series.color);
+            
+            // 绘制名称（不截断）
+            painter.setPen(QColor("#2c3e50"));
+            QString displayText = series.name;
+            if (displayText.isEmpty()) {
+                displayText = QString("%1").arg(series.currentValue, 0, 'f', 1);
+            }
+            
+            painter.drawText(currentX + textOffset, itemY + 12, displayText);
+            
+            currentX += itemWidths[i] + spacing;
+            itemIndex++;
+        }
     }
 }

@@ -11,6 +11,10 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QProgressBar>
+#include <QEvent>
+#include <QRect>
+#include <QWindow>
+#include <QTimer>
 #include "../core/diskanalyzer.h"
 #include "../core/diskcleaner.h"
 #include "dashboardwidget.h"
@@ -31,6 +35,10 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void changeEvent(QEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    bool event(QEvent *event) override;
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 
 private slots:
     void onAnalyzeClicked();
@@ -43,6 +51,9 @@ private slots:
     void onCleanupProgress(const QString &itemName, int percent);
     void onCleanupFinished(const QList<CleanupResult> &results);
     void onCleanupError(const QString &error);
+    
+    // DDE窗口状态检测定时器
+    void onWindowStateCheck();
 
 private:
     void initUI();
@@ -53,6 +64,7 @@ private:
     void connectSignals();
     void applyTheme();
     void performAnalyzeCleanup(const QList<ScanResult> &items);
+    bool checkX11WindowState();
     
     // UI 组件
     QTabWidget *m_tabWidget;
@@ -76,6 +88,22 @@ private:
     // 对话框
     CleanupDialog *m_cleanupDialog;
     ProgressDialog *m_progressDialog;
+    
+    // 保存窗口几何信息
+    QRect m_normalGeometry;
+    bool m_wasMaximized;
+    
+    // DDE窗口状态检测定时器
+    QTimer *m_stateCheckTimer;
+    bool m_lastX11MaximizedState;
+    QRect m_lastGeometry;  // 用于检测几何变化
+    
+    // DDE还原按钮悬停检测
+    QTimer *m_restoreHoverTimer;
+    bool m_restoreHoverTriggered;
+    QPoint m_lastMousePos;
+    
+    void checkRestoreButtonHover();
 };
 
 #endif // MAINWINDOW_H

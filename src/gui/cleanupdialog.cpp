@@ -433,8 +433,10 @@ void CleanupDialog::createScanResultPage()
         "   color: white; "
         "   border-radius: 5px; "
         "   padding: 8px 20px; "
+        "   outline: none; "
         "} "
         "QPushButton:hover { background-color: #d32f2f; }"
+        "QPushButton:focus { outline: none; border: none; }"
     );
     
     m_backButton = new QPushButton(tr("返回分区选择"), this);

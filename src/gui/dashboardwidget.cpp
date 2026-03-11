@@ -469,41 +469,58 @@ QString DashboardWidget::getDisplayInfo()
     
     QString output = QString::fromUtf8(process.readAllStandardOutput());
     
-    // 查找连接的显示器
+    // 查找所有连接的显示器
     QStringList lines = output.split('\n');
-    QString displayInfo;
+    QStringList displayList;
     
     for (int i = 0; i < lines.size(); ++i) {
         const QString &line = lines[i];
-        // 查找 "connected" 关键字
-        if (line.contains(" connected", Qt::CaseInsensitive)) {
+        // 查找 "connected" 关键字（排除 "disconnected"）
+        if (line.contains(" connected", Qt::CaseInsensitive) && 
+            !line.contains("disconnected", Qt::CaseInsensitive)) {
             // 提取显示器名称（第一个单词）
             QStringList parts = line.split(QRegularExpression("\\s+"));
             if (!parts.isEmpty()) {
                 QString displayName = parts[0];
+                QString resolution;
                 
-                // 查找分辨率信息（下一行通常包含分辨率）
-                if (i + 1 < lines.size()) {
-                    QString nextLine = lines[i + 1].trimmed();
-                    QRegularExpression resRe("(\\d+x\\d+)");
-                    QRegularExpressionMatch match = resRe.match(nextLine);
-                    if (match.hasMatch()) {
-                        displayInfo = QString("%1 (%2)").arg(displayName).arg(match.captured(1));
-                        break;
+                // 尝试从当前行提取分辨率（格式如：1920x1080+0+0）
+                QRegularExpression resRe("(\\d+x\\d+)\\+");
+                QRegularExpressionMatch match = resRe.match(line);
+                if (match.hasMatch()) {
+                    resolution = match.captured(1);
+                } else {
+                    // 如果当前行没有，查找下一行的分辨率
+                    if (i + 1 < lines.size()) {
+                        QString nextLine = lines[i + 1].trimmed();
+                        QRegularExpression resRe2("(\\d+x\\d+)");
+                        QRegularExpressionMatch match2 = resRe2.match(nextLine);
+                        if (match2.hasMatch()) {
+                            resolution = match2.captured(1);
+                        }
                     }
                 }
                 
-                displayInfo = displayName;
-                break;
+                // 添加到列表
+                if (!resolution.isEmpty()) {
+                    displayList.append(QString("%1 (%2)").arg(displayName).arg(resolution));
+                } else {
+                    displayList.append(displayName);
+                }
             }
         }
     }
     
-    if (displayInfo.isEmpty()) {
+    if (displayList.isEmpty()) {
         return "未检测到";
     }
     
-    return displayInfo;
+    // 如果有多个显示器，用换行符分隔
+    if (displayList.size() > 1) {
+        return displayList.join("\n");
+    }
+    
+    return displayList.first();
 }
 
 void DashboardWidget::updateSystemStats()

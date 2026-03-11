@@ -78,7 +78,7 @@ void FileShredderWidget::initUI()
     headerCard->setObjectName("headerCard");
     headerCard->setStyleSheet(
         "QFrame#headerCard { "
-        "   background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #FF6B6B, stop:1 #EE5A5A); "
+        "   background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #E74C3C, stop:1 #27AE60); "
         "   border-radius: 12px; "
         "   padding: 0px; "
         "}"
@@ -118,8 +118,8 @@ void FileShredderWidget::initUI()
         "   border-radius: 8px; "
         "}"
         "QFrame#dropCard:hover { "
-        "   border-color: #3498DB; "
-        "   background-color: #EBF5FB; "
+        "   border-color: #0081FF; "
+        "   background-color: #E8F4FD; "
         "}"
     );
 
@@ -159,7 +159,7 @@ void FileShredderWidget::initUI()
     m_addFilesBtn->setCursor(Qt::PointingHandCursor);
     m_addFilesBtn->setStyleSheet(
         "QPushButton { "
-        "   background-color: #3498DB; "
+        "   background-color: #0081FF; "
         "   color: white; "
         "   border: none; "
         "   border-radius: 6px; "
@@ -167,8 +167,8 @@ void FileShredderWidget::initUI()
         "   font-weight: 500; "
         "   padding: 6px 12px; "
         "} "
-        "QPushButton:hover { background-color: #2980B9; }"
-        "QPushButton:pressed { background-color: #21618C; }"
+        "QPushButton:hover { background-color: #0066CC; }"
+        "QPushButton:pressed { background-color: #0052A3; }"
     );
     connect(m_addFilesBtn, &QPushButton::clicked, this, &FileShredderWidget::onAddFilesClicked);
     buttonLayout->addWidget(m_addFilesBtn);
@@ -179,7 +179,7 @@ void FileShredderWidget::initUI()
     m_addFolderBtn->setCursor(Qt::PointingHandCursor);
     m_addFolderBtn->setStyleSheet(
         "QPushButton { "
-        "   background-color: #27AE60; "
+        "   background-color: #00C6FF; "
         "   color: white; "
         "   border: none; "
         "   border-radius: 6px; "
@@ -187,8 +187,8 @@ void FileShredderWidget::initUI()
         "   font-weight: 500; "
         "   padding: 6px 12px; "
         "} "
-        "QPushButton:hover { background-color: #219A52; }"
-        "QPushButton:pressed { background-color: #1E8449; }"
+        "QPushButton:hover { background-color: #00A8D6; }"
+        "QPushButton:pressed { background-color: #008FB3; }"
     );
     connect(m_addFolderBtn, &QPushButton::clicked, this, &FileShredderWidget::onAddFolderClicked);
     buttonLayout->addWidget(m_addFolderBtn);
@@ -202,7 +202,7 @@ void FileShredderWidget::initUI()
     m_removeSelectedBtn->setCursor(Qt::PointingHandCursor);
     m_removeSelectedBtn->setStyleSheet(
         "QPushButton { "
-        "   background-color: #E67E22; "
+        "   background-color: #5DADE2; "
         "   color: white; "
         "   border: none; "
         "   border-radius: 6px; "
@@ -210,8 +210,8 @@ void FileShredderWidget::initUI()
         "   font-weight: 500; "
         "   padding: 6px 12px; "
         "} "
-        "QPushButton:hover { background-color: #D35400; }"
-        "QPushButton:pressed { background-color: #BA4A00; }"
+        "QPushButton:hover { background-color: #3498DB; }"
+        "QPushButton:pressed { background-color: #2E86C1; }"
         "QPushButton:disabled { background-color: #BDC3C7; color: #7F8C8D; }"
     );
     connect(m_removeSelectedBtn, &QPushButton::clicked, this, &FileShredderWidget::onRemoveSelectedClicked);
@@ -223,16 +223,16 @@ void FileShredderWidget::initUI()
     m_clearListBtn->setCursor(Qt::PointingHandCursor);
     m_clearListBtn->setStyleSheet(
         "QPushButton { "
-        "   background-color: #95A5A6; "
-        "   color: white; "
+        "   background-color: #AED6F1; "
+        "   color: #2C3E50; "
         "   border: none; "
         "   border-radius: 6px; "
         "   font-size: 12px; "
         "   font-weight: 500; "
         "   padding: 6px 12px; "
         "} "
-        "QPushButton:hover { background-color: #7F8C8D; }"
-        "QPushButton:pressed { background-color: #616A6B; }"
+        "QPushButton:hover { background-color: #85C1E9; }"
+        "QPushButton:pressed { background-color: #5DADE2; }"
         "QPushButton:disabled { background-color: #BDC3C7; color: #7F8C8D; }"
     );
     connect(m_clearListBtn, &QPushButton::clicked, this, &FileShredderWidget::onClearListClicked);
@@ -292,7 +292,7 @@ void FileShredderWidget::initUI()
         "   margin: 3px 0px; "
         "   background-color: #F8F9FA; "
         "   border-radius: 6px; "
-        "   border-left: 4px solid #3498DB; "
+        "   border-left: 4px solid #0081FF; "
         "   font-size: 13px; "
         "} "
         "QListWidget::item:hover { "
@@ -301,7 +301,7 @@ void FileShredderWidget::initUI()
         "QListWidget::item:selected { "
         "   background-color: #D4E6F1; "
         "   color: #2C3E50; "
-        "   border-left: 4px solid #E74C3C; "
+        "   border-left: 4px solid #0052A3; "
         "}"
         "QScrollBar:vertical { "
         "   background-color: #F0F0F0; "
@@ -417,7 +417,7 @@ void FileShredderWidget::initUI()
     // 状态标签
     QLabel *statusLabel = new QLabel(tr("已开启"), this);
     statusLabel->setObjectName("statusLabel");
-    statusLabel->setStyleSheet("font-size: 12px; color: #27AE60; font-weight: bold; background: transparent;");
+    statusLabel->setStyleSheet("font-size: 12px; color: #0081FF; font-weight: bold; background: transparent;");
     statusLabel->setFixedWidth(50);  // 固定宽度避免抖动
     statusLabel->setAlignment(Qt::AlignCenter);
     rightLayout->addWidget(statusLabel);
@@ -447,12 +447,12 @@ void FileShredderWidget::initUI()
         "   border: 2px solid #9E9E9E; "
         "} "
         "QCheckBox::indicator:checked { "
-        "   background-color: #4CAF50; "
-        "   border: 2px solid #388E3C; "
+        "   background-color: #0081FF; "
+        "   border: 2px solid #0066CC; "
         "} "
         "QCheckBox::indicator:checked:hover { "
-        "   background-color: #388E3C; "
-        "   border: 2px solid #2E7D32; "
+        "   background-color: #0066CC; "
+        "   border: 2px solid #0052A3; "
         "}"
     );
     rightLayout->addWidget(m_privilegeCheckBox);
@@ -461,7 +461,7 @@ void FileShredderWidget::initUI()
     connect(m_privilegeCheckBox, &QCheckBox::checkStateChanged, this, [statusLabel](Qt::CheckState state) {
         if (state == Qt::Checked) {
             statusLabel->setText(QObject::tr("已开启"));
-            statusLabel->setStyleSheet("font-size: 12px; color: #27AE60; font-weight: bold; background: transparent;");
+            statusLabel->setStyleSheet("font-size: 12px; color: #0081FF; font-weight: bold; background: transparent;");
         } else {
             statusLabel->setText(QObject::tr("已关闭"));
             statusLabel->setStyleSheet("font-size: 12px; color: #95A5A6; font-weight: bold; background: transparent;");

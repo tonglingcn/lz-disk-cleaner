@@ -55,6 +55,9 @@ void SystemSlimmerWorker::startScan()
         m_options.searchPaths << QDir::homePath();
     }
 
+    // 发送开始扫描信号
+    emit scanProgress(tr("正在扫描..."), 1, 0, 0);
+
     // 执行扫描
     for (const QString &path : m_options.searchPaths) {
         if (m_stopRequested) break;
@@ -68,13 +71,23 @@ void SystemSlimmerWorker::startScan()
 
     // 处理大文件结果
     if (m_scanLargeFiles) {
+        emit scanProgress(tr("正在整理大文件列表..."), 90, m_totalScannedFiles, m_largeFiles.size());
         std::sort(m_largeFiles.begin(), m_largeFiles.end());
     }
 
     // 处理重复文件结果
     if (m_scanDuplicates) {
+        emit scanProgress(tr("正在计算文件指纹..."), 50, m_totalScannedFiles, m_largeFiles.size());
         findDuplicateFiles();
     }
+
+    if (m_stopRequested) {
+        emit scanError(tr("扫描已取消"));
+        return;
+    }
+
+    // 发送即将完成信号
+    emit scanProgress(tr("正在生成结果..."), 95, m_totalScannedFiles, m_largeFiles.size());
 
     SlimmerScanResult result;
     result.success = true;
@@ -113,14 +126,26 @@ void SystemSlimmerWorker::scanDirectory(const QString &path)
     QDir dir(path);
     if (!dir.exists()) return;
 
-    // 基于已扫描文件数和目录数估算进度，从较低值开始逐步增长
-    // 文件贡献：每扫描 500 个文件增加 1%
-    // 目录贡献：每扫描 50 个目录增加 1%
-    // 限制最大值为 95%，完成时由 UI 设置为 100%
-    int fileProgress = m_totalScannedFiles / 500;
-    int dirProgress = m_totalScannedDirs / 50;
-    int estimatedProgress = qMin(95, fileProgress + dirProgress);
-    emit scanProgress(path, estimatedProgress, m_totalScannedFiles, m_largeFiles.size());
+    // 分阶段进度计算：
+    // - 大文件扫描：扫描阶段进度 1% -> 90%
+    // - 重复文件扫描：扫描阶段进度 1% -> 50%（hash计算占50%->95%）
+    // 使用对数增长让进度更平滑
+    int baseProgress, maxProgress;
+    if (m_scanDuplicates) {
+        baseProgress = 1;
+        maxProgress = 50;
+    } else {
+        baseProgress = 1;
+        maxProgress = 90;
+    }
+    
+    // 基于已扫描项数计算进度，使用对数衰减让增长更平滑
+    // 文件数贡献更大，目录数贡献较小
+    int fileContrib = static_cast<int>(qLn(m_totalScannedFiles + 1) / qLn(1.5));
+    int dirContrib = static_cast<int>(qLn(m_totalScannedDirs + 1) / qLn(2.0));
+    int progress = qMin(maxProgress, baseProgress + fileContrib + dirContrib);
+    
+    emit scanProgress(path, progress, m_totalScannedFiles, m_largeFiles.size());
 
     QFileInfoList entries = dir.entryInfoList(
         QDir::AllEntries | QDir::NoDotAndDotDot | 
@@ -174,6 +199,13 @@ void SystemSlimmerWorker::findDuplicateFiles()
         }
     }
 
+    // 计算需要处理的文件总数，用于进度计算
+    int totalFilesToHash = 0;
+    for (auto it = m_sizeGroups.begin(); it != m_sizeGroups.end(); ++it) {
+        totalFilesToHash += it.value().size();
+    }
+    int hashedFiles = 0;
+
     // 进一步比较hash
     for (auto it = m_sizeGroups.begin(); it != m_sizeGroups.end() && !m_stopRequested; ++it) {
         qint64 size = it.key();
@@ -188,6 +220,12 @@ void SystemSlimmerWorker::findDuplicateFiles()
             if (!hash.isEmpty()) {
                 hashGroups[hash].append(filePath);
             }
+            
+            // 更新进度：hash计算阶段 50% -> 95%
+            hashedFiles++;
+            int hashProgress = 50 + static_cast<int>(40.0 * hashedFiles / totalFilesToHash);
+            emit scanProgress(tr("正在计算文件指纹... %1/%2").arg(hashedFiles).arg(totalFilesToHash), 
+                             hashProgress, m_totalScannedFiles, m_largeFiles.size());
         }
 
         // 保存真正的重复组

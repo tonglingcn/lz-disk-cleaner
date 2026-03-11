@@ -78,8 +78,7 @@ void ScanThread::run()
             break;
         }
 
-        // 发送进度
-        int percent = (currentCategory * 100) / totalCategories;
+        // 获取类别名称
         QString categoryName;
         switch (category) {
         case ScanCategory::USER_CACHE: categoryName = tr("用户缓存"); break;
@@ -96,10 +95,17 @@ void ScanThread::run()
         case ScanCategory::IMMUTABLE_SNAPSHOTS: categoryName = tr("磐石系统快照"); break;
         default: categoryName = tr("未知"); break;
         }
-        emit scanProgress(categoryName, percent);
 
-        // 扫描该类别
-        QList<ScanResult> results = scanCategory(category);
+        // 发送开始扫描该类别的进度（使用起始百分比）
+        // 每个类别分配 (95% / totalCategories) 的进度范围
+        int categoryProgressStart = (currentCategory * 95) / totalCategories;
+        int categoryProgressEnd = ((currentCategory + 1) * 95) / totalCategories;
+        
+        // 发送扫描开始信号，进度为该类别的起始值
+        emit scanProgress(categoryName, categoryProgressStart);
+
+        // 扫描该类别（传入进度范围，用于内部更新）
+        QList<ScanResult> results = scanCategory(category, categoryName, categoryProgressStart, categoryProgressEnd);
         emit categoryScanned(category, results);
 
         // 累计统计
@@ -265,8 +271,13 @@ QString ScanThread::getAppIcon(const QString &appName)
     return "📁";
 }
 
-QList<ScanResult> ScanThread::scanCategory(ScanCategory category)
+QList<ScanResult> ScanThread::scanCategory(ScanCategory category, const QString &categoryName,
+                                             int progressStart, int progressEnd)
 {
+    m_currentCategoryName = categoryName;
+    m_progressStart = progressStart;
+    m_progressEnd = progressEnd;
+    
     QString homePath = QDir::homePath();
 
     switch (category) {
@@ -283,28 +294,44 @@ QList<ScanResult> ScanThread::scanCategory(ScanCategory category)
                 "nvidia", "qtshadercache", "gstreamer-1.0", "vmware"
             };
             
-            // 扫描子目录 - 使用层级扫描
+            // 收集所有需要扫描的目录
+            QStringList allDirsToScan;
+            
+            // 先收集主要子目录
             for (const QString &subDir : cacheSubDirs) {
                 QString fullPath = cachePath + "/" + subDir;
                 QDir subDirPath(fullPath);
                 if (subDirPath.exists()) {
-                    QList<ScanResult> subResults = scanDirectoryWithChildren(fullPath, category, subDir, 0);
-                    if (!subResults.isEmpty()) {
-                        results.append(subResults);
-                    }
+                    allDirsToScan.append(subDir);
                 }
             }
             
-            // 扫描其他未分类的缓存目录（使用层级扫描）
+            // 收集其他未分类的缓存目录
             QFileInfoList otherEntries = cacheDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
             for (const QFileInfo &entry : otherEntries) {
                 if (!cacheSubDirs.contains(entry.fileName())) {
+                    allDirsToScan.append(entry.fileName());
+                }
+            }
+            
+            // 扫描子目录 - 使用层级扫描，并更新进度
+            int totalItems = allDirsToScan.size();
+            int currentItem = 0;
+            
+            for (const QString &subDir : allDirsToScan) {
+                if (m_stopRequested) return results;
+                
+                QString fullPath = cachePath + "/" + subDir;
+                QDir subDirPath(fullPath);
+                if (subDirPath.exists()) {
                     QList<ScanResult> subResults = scanDirectoryWithChildren(
-                        entry.absoluteFilePath(), category, entry.fileName(), 0);
+                        fullPath, category, subDir, 0, 
+                        progressStart, progressEnd, currentItem, totalItems);
                     if (!subResults.isEmpty()) {
                         results.append(subResults);
                     }
                 }
+                currentItem++;
             }
             
             // 按大小排序
@@ -428,14 +455,21 @@ QList<ScanResult> ScanThread::scanCategory(ScanCategory category)
             {homePath + "/.config/chromium/Default/Cache", tr("Chromium配置")},
             {homePath + "/.cache/yandex-browser", tr("Yandex浏览器")}
         };
+        
+        int totalItems = browserPaths.size();
+        int currentItem = 0;
+        
         for (const BrowserPath &bp : browserPaths) {
             QDir dir(bp.path);
             if (dir.exists()) {
-                QList<ScanResult> subResults = scanDirectoryWithChildren(bp.path, category, bp.displayName, 0);
+                QList<ScanResult> subResults = scanDirectoryWithChildren(
+                    bp.path, category, bp.displayName, 0,
+                    progressStart, progressEnd, currentItem, totalItems);
                 if (!subResults.isEmpty()) {
                     results.append(subResults);
                 }
             }
+            currentItem++;
         }
         return results;
     }
@@ -456,15 +490,21 @@ QList<ScanResult> ScanThread::scanCategory(ScanCategory category)
             {homePath + "/.gradle/caches", tr("Gradle")},
             {homePath + "/.cargo/registry/cache", tr("Cargo")}
         };
+        
+        int totalItems = devPaths.size();
+        int currentItem = 0;
+        
         for (const DevPath &devPath : devPaths) {
             QDir dir(devPath.path);
             if (dir.exists()) {
                 QList<ScanResult> subResults = scanDirectoryWithChildren(
-                    devPath.path, category, devPath.displayName, 0);
+                    devPath.path, category, devPath.displayName, 0,
+                    progressStart, progressEnd, currentItem, totalItems);
                 if (!subResults.isEmpty()) {
                     results.append(subResults);
                 }
             }
+            currentItem++;
         }
         return results;
     }
@@ -479,8 +519,16 @@ QList<ScanResult> ScanThread::scanCategory(ScanCategory category)
         if (layersDir.exists()) {
             // 获取所有子目录（应用层）
             QFileInfoList entries = layersDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+            int totalItems = entries.size();
+            int currentItem = 0;
             
             for (const QFileInfo &entry : entries) {
+                if (m_stopRequested) return results;
+                
+                // 更新进度
+                int percent = progressStart + (progressEnd - progressStart) * currentItem / totalItems;
+                emit scanProgress(tr("%1 (%2/%3)").arg(categoryName).arg(currentItem + 1).arg(totalItems), percent);
+                
                 QString appId = entry.fileName();
                 QString appPath = entry.absoluteFilePath();
                 
@@ -626,6 +674,8 @@ QList<ScanResult> ScanThread::scanCategory(ScanCategory category)
                     
                     results.append(result);
                 }
+                
+                currentItem++;
             }
         }
         
@@ -710,7 +760,9 @@ QList<ScanResult> ScanThread::scanDirectory(const QString &path, ScanCategory ca
 
 // 层级扫描目录 - 对大于阈值的目录深入扫描子目录
 QList<ScanResult> ScanThread::scanDirectoryWithChildren(const QString &path, ScanCategory category,
-                                                         const QString &displayName, int depth)
+                                                         const QString &displayName, int depth,
+                                                         int progressStart, int progressEnd,
+                                                         int currentItem, int totalItems)
 {
     QList<ScanResult> results;
     
@@ -722,6 +774,12 @@ QList<ScanResult> ScanThread::scanDirectoryWithChildren(const QString &path, Sca
     QDir dir(path);
     if (!dir.exists()) {
         return results;
+    }
+
+    // 更新进度（在扫描前）
+    if (totalItems > 0) {
+        int percent = progressStart + (progressEnd - progressStart) * currentItem / totalItems;
+        emit scanProgress(tr("%1 (%2/%3)").arg(m_currentCategoryName).arg(currentItem + 1).arg(totalItems), percent);
     }
 
     int fileCount = 0;
@@ -772,7 +830,8 @@ QList<ScanResult> ScanThread::scanDirectoryWithChildren(const QString &path, Sca
             
             // 递归扫描子目录
             QList<ScanResult> subResults = scanDirectoryWithChildren(
-                subInfo.absoluteFilePath(), category, subInfo.fileName(), depth + 1);
+                subInfo.absoluteFilePath(), category, subInfo.fileName(), depth + 1,
+                progressStart, progressEnd, currentItem, totalItems);
             
             if (!subResults.isEmpty()) {
                 result.children.append(subResults.first());
@@ -1056,9 +1115,14 @@ void AnalyzeWidget::createProgressPage()
         "   border: none;"
         "   border-radius: 5px;"
         "   padding: 8px 20px;"
+        "   outline: none;"
         "}"
         "QPushButton:hover {"
         "   background-color: #c0392b;"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"
+        "   border: none;"
         "}"
     );
     connect(m_stopScanButton, &QPushButton::clicked, this, &AnalyzeWidget::onStopScanClicked);
@@ -1118,6 +1182,27 @@ void AnalyzeWidget::createResultPage()
         "   font-weight: bold;"
         "   border: none;"
         "   border-right: 1px solid #bdc3c7;"
+        "}"
+        "QTreeWidget::indicator {"
+        "   width: 16px;"
+        "   height: 16px;"
+        "}"
+        "QTreeWidget::indicator:unchecked {"
+        "   border: 2px solid #95a5a6;"
+        "   background: white;"
+        "   border-radius: 3px;"
+        "}"
+        "QTreeWidget::indicator:checked {"
+        "   border: 2px solid #27ae60;"
+        "   background: #27ae60;"
+        "   border-radius: 3px;"
+        "   image: url(:/icons/check.svg);"
+        "}"
+        "QTreeWidget::indicator:indeterminate {"
+        "   border: 2px solid #3498db;"
+        "   background: #3498db;"
+        "   border-radius: 3px;"
+        "   image: url(:/icons/check.svg);"
         "}"
     );
     m_resultTree->setAnimated(true);
@@ -1487,8 +1572,9 @@ static void addResultToTreeItem(QTreeWidgetItem *parent, const ScanResult &resul
     } else if (result.category == ScanCategory::USER_CACHE || 
                result.category == ScanCategory::BROWSER_CACHE ||
                result.category == ScanCategory::DEV_CACHE ||
-               result.category == ScanCategory::TEMP_FILES) {
-        // 用户缓存、浏览器缓存、开发缓存、临时文件 - 可能包含用户数据
+               result.category == ScanCategory::TEMP_FILES ||
+               result.category == ScanCategory::LINGLONG_APPS) {
+        // 用户缓存、浏览器缓存、开发缓存、临时文件、玲珑应用 - 可能包含用户数据
         item->setText(4, "🔶 " + QObject::tr("注意"));
         item->setForeground(4, QBrush(QColor("#f39c12")));
     } else {

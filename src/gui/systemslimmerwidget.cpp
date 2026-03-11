@@ -392,13 +392,14 @@ void SystemSlimmerWidget::initResultPage()
     m_backBtn->setFixedSize(80, 32);
     m_backBtn->setStyleSheet(
         "QPushButton { "
-        "   background-color: #95A5A6; "
+        "   background-color: #E74C3C; "
         "   color: white; "
         "   border: none; "
         "   border-radius: 4px; "
-        "   font-size: 12px; "
+        "   font-size: 13px; "
+        "   font-weight: bold; "
         "}"
-        "QPushButton:hover { background-color: #7F8C8D; }"
+        "QPushButton:hover { background-color: #C0392B; }"
     );
     headerLayout->addWidget(m_backBtn);
     
@@ -442,6 +443,15 @@ void SystemSlimmerWidget::initResultPage()
         "   gridline-color: #ECF0F1; "
         "}"
         "QTableWidget::item { padding: 4px; }"
+        "QTableWidget::item:selected { "
+        "   background-color: #D6EAF8; "
+        "   color: #2C3E50; "
+        "}"
+        "QTableWidget::item:selected QCheckBox::indicator:checked { "
+        "   border: 2px solid #27ae60; "
+        "   background: #27ae60; "
+        "   border-radius: 3px; "
+        "}"
         "QHeaderView::section { "
         "   background-color: #F8F9FA; "
         "   padding: 8px; "
@@ -535,6 +545,10 @@ void SystemSlimmerWidget::initResultPage()
         "   gridline-color: #ECF0F1; "
         "}"
         "QTableWidget::item { padding: 4px; }"
+        "QTableWidget::item:selected { "
+        "   background-color: #D6EAF8; "
+        "   color: #2C3E50; "
+        "}"
         "QHeaderView::section { "
         "   background-color: #F8F9FA; "
         "   padding: 8px; "
@@ -673,15 +687,25 @@ void SystemSlimmerWidget::onScanProgress(const QString &currentPath, int percent
     m_progressBar->setValue(percent);
     m_currentPathLabel->setText(currentPath);
     
-    // 更新统计信息
-    m_statsLabel->setText(tr("已扫描 %1 个文件，发现 %2 个大文件")
-        .arg(fileCount)
-        .arg(largeFileCount));
+    // 根据扫描模式显示不同的统计信息
+    QString statsText;
+    if (m_scanLargeFiles) {
+        // 扫描大文件
+        statsText = tr("已扫描 %1 个文件，发现 %2 个大文件")
+            .arg(fileCount)
+            .arg(largeFileCount);
+    } else {
+        // 扫描重复文件
+        statsText = tr("已扫描 %1 个文件")
+            .arg(fileCount);
+    }
+    
+    m_statsLabel->setText(statsText);
 }
 
 void SystemSlimmerWidget::onScanFinished(const SlimmerScanResult &result)
 {
-    m_progressBar->setValue(100);  // 扫描完成，设置进度为100%
+    m_progressBar->setValue(100);
     m_lastResult = result;
     updateResultPage();
     showResultPage();
@@ -720,6 +744,23 @@ void SystemSlimmerWidget::updateResultPage()
             // 复选框（默认不选中）
             QCheckBox *checkBox = new QCheckBox();
             checkBox->setChecked(false);
+            checkBox->setStyleSheet(
+                "QCheckBox::indicator {"
+                "   width: 16px;"
+                "   height: 16px;"
+                "}"
+                "QCheckBox::indicator:unchecked {"
+                "   border: 2px solid #95a5a6;"
+                "   background: white;"
+                "   border-radius: 3px;"
+                "}"
+                "QCheckBox::indicator:checked {"
+                "   border: 2px solid #3498db;"
+                "   background: #3498db;"
+                "   border-radius: 3px;"
+                "   image: url(:/icons/check.svg);"
+                "}"
+            );
             QWidget *checkWidget = new QWidget();
             QHBoxLayout *checkLayout = new QHBoxLayout(checkWidget);
             checkLayout->addWidget(checkBox);
@@ -786,6 +827,23 @@ void SystemSlimmerWidget::updateResultPage()
                 // 复选框（默认不选中，但每组第一个不勾选用于保留）
                 QCheckBox *checkBox = new QCheckBox();
                 checkBox->setChecked(j > 0);  // 每组第一个不选（保留），其余选中
+                checkBox->setStyleSheet(
+                    "QCheckBox::indicator {"
+                    "   width: 16px;"
+                    "   height: 16px;"
+                    "}"
+                    "QCheckBox::indicator:unchecked {"
+                    "   border: 2px solid #95a5a6;"
+                    "   background: white;"
+                    "   border-radius: 3px;"
+                    "}"
+                    "QCheckBox::indicator:checked {"
+                    "   border: 2px solid #3498db;"
+                    "   background: #3498db;"
+                    "   border-radius: 3px;"
+                    "   image: url(:/icons/check.svg);"
+                    "}"
+                );
                 QWidget *checkWidget = new QWidget();
                 QHBoxLayout *checkLayout = new QHBoxLayout(checkWidget);
                 checkLayout->addWidget(checkBox);

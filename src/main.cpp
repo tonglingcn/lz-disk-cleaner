@@ -39,9 +39,6 @@ int main(int argc, char *argv[])
         app.installTranslator(&translator);
     }
     
-    // 设置应用样式（适配 Deepin 主题）
-    app.setStyle(QStyleFactory::create("Fusion"));
-    
     // 初始化日志系统
     Logger::instance()->init();
     LOG_INFO("LZ Disk Cleaner started");

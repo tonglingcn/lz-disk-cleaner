@@ -17,6 +17,13 @@ find_package(Qt6 REQUIRED COMPONENTS
     Network
 )
 
+# 查找 X11 和 XCB 库（用于DDE窗口最大化还原问题）
+find_package(X11 QUIET)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(XCB xcb IMPORTED_TARGET QUIET)
+endif()
+
 # ==================== 主程序 ====================
 
 # 源文件
@@ -79,6 +86,18 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::Network
 )
+
+# 链接 X11/XCB 库（用于DDE窗口状态监听）
+if(X11_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${X11_LIBRARIES})
+    target_include_directories(${PROJECT_NAME} PRIVATE ${X11_INCLUDE_DIR})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_X11)
+endif()
+
+if(XCB_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::XCB)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_XCB)
+endif()
 
 # 设置输出目录
 set_target_properties(${PROJECT_NAME} PROPERTIES

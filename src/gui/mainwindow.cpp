@@ -21,6 +21,51 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QStandardPaths>
+#include <QShowEvent>
+#include <QWindowStateChangeEvent>
+#include <QTimer>
+#include <QCursor>
+#include <QKeyEvent>
+#include <QMouseEvent>
+#include <QTime>
+#include <QScreen>
+#include <QGuiApplication>
+#include <QElapsedTimer>
+
+#ifdef HAVE_XCB
+#include <xcb/xcb.h>
+#endif
+
+#ifdef HAVE_X11
+// X11头文件定义了一些与Qt冲突的宏，需要先取消定义
+#ifdef KeyPress
+#undef KeyPress
+#endif
+#ifdef KeyRelease
+#undef KeyRelease
+#endif
+#ifdef FocusIn
+#undef FocusIn
+#endif
+#ifdef FocusOut
+#undef FocusOut
+#endif
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+// X11头文件包含后再次取消定义，防止后续Qt代码冲突
+#ifdef KeyPress
+#undef KeyPress
+#endif
+#ifdef KeyRelease
+#undef KeyRelease
+#endif
+#ifdef FocusIn
+#undef FocusIn
+#endif
+#ifdef FocusOut
+#undef FocusOut
+#endif
+#endif
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -38,6 +83,12 @@ MainWindow::MainWindow(QWidget *parent)
     , m_cleaner(nullptr)
     , m_cleanupDialog(nullptr)
     , m_progressDialog(nullptr)
+    , m_wasMaximized(false)
+    , m_stateCheckTimer(nullptr)
+    , m_lastX11MaximizedState(false)
+    , m_lastGeometry(0, 0, 0, 0)
+    , m_restoreHoverTimer(nullptr)
+    , m_restoreHoverTriggered(false)
 {
     LOG_INFO("Initializing main window");
     
@@ -58,7 +109,34 @@ void MainWindow::initUI()
     // 设置窗口属性
     setWindowTitle(tr("磁盘清理工具-Deepin版"));
     setMinimumSize(900, 700);
-    resize(1100, 800);
+    
+    // 根据屏幕分辨率智能设置窗口大小
+    QScreen *screen = QGuiApplication::primaryScreen();
+    if (screen) {
+        QRect screenGeometry = screen->availableGeometry();
+        int screenWidth = screenGeometry.width();
+        int screenHeight = screenGeometry.height();
+        
+        LOG_INFO(QString("Screen available size: %1x%2").arg(screenWidth).arg(screenHeight));
+        
+        // 如果屏幕较小（宽度 <= 1366 或高度 <= 768），使用最大化
+        if (screenWidth <= 1366 || screenHeight <= 768) {
+            LOG_INFO("Small screen detected, will maximize on show");
+            // 先设置一个合理的初始大小，稍后在showEvent中最大化
+            resize(screenWidth - 100, screenHeight - 100);
+        } else {
+            // 屏幕较大，使用固定大小 1100x860
+            resize(1100, 860);
+            LOG_INFO("Large screen detected, using default size: 1100x860");
+        }
+    } else {
+        // 无法获取屏幕信息，使用默认大小
+        resize(1100, 860);
+        LOG_WARNING("Could not get screen info, using default size");
+    }
+    
+    // 创建菜单栏
+    createMenuBar();
     
     // 创建中心部件
     QWidget *centralWidget = new QWidget(this);
@@ -68,11 +146,6 @@ void MainWindow::initUI()
     QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
     mainLayout->setContentsMargins(10, 10, 10, 10);
     mainLayout->setSpacing(10);
-    
-    // 创建菜单栏
-    createMenuBar();
-    
-    // 不创建工具栏，保持界面简洁
     
     // 创建标签页
     m_tabWidget = new QTabWidget(this);
@@ -225,6 +298,74 @@ void MainWindow::createMenuBar()
     QMenu *fileMenu = menuBar->addMenu(tr("文件(&F)"));
     QAction *exitAction = fileMenu->addAction(tr("退出(&X)"), QKeySequence::Quit, this, &QWidget::close);
     exitAction->setIcon(QIcon(":/icons/about.svg"));
+    
+    // 查看菜单 - 添加窗口控制选项
+    QMenu *viewMenu = menuBar->addMenu(tr("查看(&V)"));
+    QAction *maximizeAction = viewMenu->addAction(tr("最大化(&M)"), this, [this]() {
+        if (isMaximized()) {
+            showNormal();
+            
+            // 还原到固定的初始大小并居中
+            QScreen *screen = QGuiApplication::primaryScreen();
+            if (screen) {
+                QRect screenGeometry = screen->availableGeometry();
+                
+                // 固定的窗口大小
+                int windowWidth = 1100;
+                int windowHeight = 860;
+                
+                // 计算居中位置
+                int x = (screenGeometry.width() - windowWidth) / 2 + screenGeometry.x();
+                int y = (screenGeometry.height() - windowHeight) / 2 + screenGeometry.y();
+                
+                // 设置固定的几何信息
+                setGeometry(x, y, windowWidth, windowHeight);
+                
+                // 更新保存的正常几何信息
+                m_normalGeometry = geometry();
+            } else if (!m_normalGeometry.isNull()) {
+                setGeometry(m_normalGeometry);
+            }
+        } else {
+            showMaximized();
+        }
+    });
+    maximizeAction->setShortcut(QKeySequence(Qt::Key_F11));
+    
+    QAction *restoreAction = viewMenu->addAction(tr("还原窗口(&R)"), this, [this]() {
+        LOG_INFO("Manual restore triggered");
+        showNormal();
+        
+        // 还原到固定的初始大小并居中
+        QScreen *screen = QGuiApplication::primaryScreen();
+        if (screen) {
+            QRect screenGeometry = screen->availableGeometry();
+            
+            // 固定的窗口大小
+            int windowWidth = 1100;
+            int windowHeight = 860;
+            
+            // 计算居中位置
+            int x = (screenGeometry.width() - windowWidth) / 2 + screenGeometry.x();
+            int y = (screenGeometry.height() - windowHeight) / 2 + screenGeometry.y();
+            
+            // 设置固定的几何信息
+            setGeometry(x, y, windowWidth, windowHeight);
+            
+            // 更新保存的正常几何信息
+            m_normalGeometry = geometry();
+            
+            LOG_INFO(QString("Manually restored to fixed size: x=%1, y=%2, w=%3, h=%4")
+                .arg(x).arg(y).arg(windowWidth).arg(windowHeight));
+        } else {
+            // 无法获取屏幕信息，使用默认位置
+            resize(1100, 860);
+            if (!m_normalGeometry.isNull()) {
+                setGeometry(m_normalGeometry);
+            }
+        }
+    });
+    restoreAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
     
     // 工具菜单
     QMenu *toolsMenu = menuBar->addMenu(tr("工具(&T)"));
@@ -467,7 +608,7 @@ void MainWindow::onAboutClicked()
            "<li>系统瘦身</li>"
            "</ul>"
            "<p><b>技术栈：</b> C++17 + Qt6</p>"
-           "<p>Copyright © 2026 克亮</p>")
+           "<p align=\"center\">Copyright © 2026 克亮 UOS-AI</p>")
     );
 }
 
@@ -889,6 +1030,283 @@ void MainWindow::closeEvent(QCloseEvent *event)
     QMainWindow::closeEvent(event);
 }
 
+void MainWindow::showEvent(QShowEvent *event)
+{
+    QMainWindow::showEvent(event);
+    
+    // 首次显示时处理窗口位置和大小
+    static bool firstShow = true;
+    if (firstShow) {
+        firstShow = false;
+        
+        // 获取屏幕几何信息
+        QScreen *screen = QGuiApplication::primaryScreen();
+        if (screen) {
+            QRect screenGeometry = screen->availableGeometry();
+            int screenWidth = screenGeometry.width();
+            int screenHeight = screenGeometry.height();
+            
+            // 如果屏幕较小，最大化窗口
+            if (screenWidth <= 1366 || screenHeight <= 768) {
+                LOG_INFO("Maximizing window for small screen");
+                showMaximized();
+            } else {
+                // 屏幕较大，居中显示
+                int x = (screenGeometry.width() - width()) / 2 + screenGeometry.x();
+                int y = (screenGeometry.height() - height()) / 2 + screenGeometry.y();
+                move(x, y);
+                
+                LOG_INFO(QString("Window centered at: x=%1, y=%2").arg(x).arg(y));
+            }
+        }
+        
+        // 启动DDE窗口状态检测定时器
+        // 这是解决DDE窗口最大化后无法还原问题的关键workaround
+        m_stateCheckTimer = new QTimer(this);
+        connect(m_stateCheckTimer, &QTimer::timeout, this, &MainWindow::onWindowStateCheck);
+        m_stateCheckTimer->start(100);  // 每100ms检测一次
+        LOG_INFO("DDE window state check timer started (100ms interval)");
+        
+        // 启动还原按钮悬停检测定时器
+        // 当鼠标悬停在还原按钮区域1秒后，自动触发F11还原
+        m_restoreHoverTimer = new QTimer(this);
+        connect(m_restoreHoverTimer, &QTimer::timeout, this, &MainWindow::checkRestoreButtonHover);
+        m_restoreHoverTimer->start(200);  // 每200ms检测一次鼠标位置
+        LOG_INFO("Restore button hover detection timer started (200ms interval)");
+    }
+    
+    // 保存初始几何信息
+    if (m_normalGeometry.isNull() && !isMaximized()) {
+        m_normalGeometry = geometry();
+        LOG_INFO(QString("Saved initial geometry: x=%1, y=%2, w=%3, h=%4")
+            .arg(m_normalGeometry.x()).arg(m_normalGeometry.y())
+            .arg(m_normalGeometry.width()).arg(m_normalGeometry.height()));
+    }
+    
+    // 在窗口显示后，确保 QWindow 设置正确支持最大化/还原
+    if (windowHandle()) {
+        // 设置窗口标志，确保支持最大化/还原
+        Qt::WindowStates states = windowHandle()->windowStates();
+        LOG_INFO(QString("Initial window states: %1").arg(static_cast<int>(states)));
+        
+        // 确保窗口管理器正确识别窗口类型
+        windowHandle()->setFlags(windowHandle()->flags() | Qt::Window);
+    }
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::WindowStateChange) {
+        QWindowStateChangeEvent *stateEvent = static_cast<QWindowStateChangeEvent*>(event);
+        Qt::WindowStates oldState = stateEvent->oldState();
+        Qt::WindowStates newState = windowState();
+        
+        LOG_INFO(QString("Window state changed - isMaximized: %1, isMinimized: %2, isFullScreen: %3")
+            .arg(isMaximized() ? "true" : "false")
+            .arg(isMinimized() ? "true" : "false")
+            .arg(isFullScreen() ? "true" : "false"));
+        LOG_INFO(QString("State transition: %1 -> %2")
+            .arg(static_cast<int>(oldState))
+            .arg(static_cast<int>(newState)));
+        
+        // 保存正常状态的几何信息
+        if (!(oldState & Qt::WindowMaximized) && !(oldState & Qt::WindowMinimized) && 
+            !(oldState & Qt::WindowFullScreen)) {
+            m_normalGeometry = geometry();
+            LOG_INFO(QString("Saved normal geometry: x=%1, y=%2, w=%3, h=%4")
+                .arg(m_normalGeometry.x()).arg(m_normalGeometry.y())
+                .arg(m_normalGeometry.width()).arg(m_normalGeometry.height()));
+        }
+        
+        // 从最大化状态切换到正常状态
+        if ((oldState & Qt::WindowMaximized) && !(newState & Qt::WindowMaximized) && 
+            !(newState & Qt::WindowMinimized)) {
+            LOG_INFO("Restoring from maximized state");
+            
+            // 强制恢复到保存的几何信息
+            if (!m_normalGeometry.isNull()) {
+                QTimer::singleShot(0, this, [this]() {
+                    setGeometry(m_normalGeometry);
+                    LOG_INFO(QString("Restored to geometry: x=%1, y=%2, w=%3, h=%4")
+                        .arg(m_normalGeometry.x()).arg(m_normalGeometry.y())
+                        .arg(m_normalGeometry.width()).arg(m_normalGeometry.height()));
+                });
+            }
+        }
+        
+        m_wasMaximized = isMaximized();
+    }
+    QMainWindow::changeEvent(event);
+}
+
+bool MainWindow::event(QEvent *event)
+{
+    // 捕获标题栏双击事件
+    if (event->type() == QEvent::NonClientAreaMouseButtonDblClick) {
+        LOG_INFO("Title bar double-clicked");
+        
+        // 切换最大化/正常状态
+        if (isMaximized()) {
+            LOG_INFO("Restoring from maximized via double-click");
+            showNormal();
+            if (!m_normalGeometry.isNull()) {
+                setGeometry(m_normalGeometry);
+            }
+        } else {
+            LOG_INFO("Maximizing via double-click");
+            showMaximized();
+        }
+        return true;
+    }
+    
+    // 捕获标题栏按钮点击
+    if (event->type() == QEvent::NonClientAreaMouseButtonPress) {
+        if (isMaximized()) {
+            // 获取当前鼠标位置
+            QPoint globalPos = QCursor::pos();
+            QPoint localPos = mapFromGlobal(globalPos);
+            
+            LOG_INFO(QString("Non-client area clicked at: x=%1, y=%2 (window width=%3)")
+                .arg(localPos.x()).arg(localPos.y()).arg(width()));
+            
+            // 检查是否点击了还原按钮区域
+            // 标题栏在窗口上方（y < 0），还原按钮在右上角
+            int rightEdge = width();
+            bool clickedRestoreButton = (localPos.y() < 0 && localPos.y() > -40 && 
+                                        localPos.x() > rightEdge - 90 && localPos.x() < rightEdge - 30);
+            
+            LOG_INFO(QString("Clicked restore button area: %1").arg(clickedRestoreButton ? "YES" : "NO"));
+            
+            if (clickedRestoreButton) {
+                LOG_INFO("Restore button clicked, triggering F11 in 100ms");
+                // 延迟触发，确保点击事件处理完成
+                QTimer::singleShot(100, this, [this]() {
+                    if (isMaximized()) {
+                        LOG_INFO("Executing F11 key press");
+                        QKeyEvent pressEvent(QEvent::KeyPress, Qt::Key_F11, Qt::NoModifier);
+                        QApplication::sendEvent(this, &pressEvent);
+                        QKeyEvent releaseEvent(QEvent::KeyRelease, Qt::Key_F11, Qt::NoModifier);
+                        QApplication::sendEvent(this, &releaseEvent);
+                    } else {
+                        LOG_INFO("Window already restored, skipping F11");
+                    }
+                });
+            }
+        }
+    }
+    
+    return QMainWindow::event(event);
+}
+
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
+{
+#ifdef HAVE_X11
+    // 处理X11事件 - 这是解决DDE窗口最大化还原问题的关键
+    // DDE窗口管理器的还原按钮点击不会触发Qt的WindowStateChange事件
+    // 我们需要监听底层的X11属性变化事件
+    if (eventType == "xcb_generic_event_t") {
+        xcb_generic_event_t *xcbEvent = static_cast<xcb_generic_event_t*>(message);
+        uint8_t responseType = xcbEvent->response_type & ~0x80;
+        
+        if (responseType == XCB_PROPERTY_NOTIFY) {
+            xcb_property_notify_event_t *propEvent = 
+                reinterpret_cast<xcb_property_notify_event_t*>(xcbEvent);
+            
+            // 获取当前窗口的X11窗口ID
+            Window winIdX11 = static_cast<Window>(winId());
+            
+            // 检查是否是当前窗口的属性变化
+            if (propEvent->window == winIdX11) {
+                Display *display = XOpenDisplay(nullptr);
+                if (display) {
+                    // 获取 _NET_WM_STATE 原子
+                    static Atom netWmState = None;
+                    static Atom netWmStateMaxVert = None;
+                    static Atom netWmStateMaxHorz = None;
+                    static bool atomsInitialized = false;
+                    
+                    if (!atomsInitialized) {
+                        atomsInitialized = true;
+                        netWmState = XInternAtom(display, "_NET_WM_STATE", True);
+                        netWmStateMaxVert = XInternAtom(display, "_NET_WM_STATE_MAXIMIZED_VERT", True);
+                        netWmStateMaxHorz = XInternAtom(display, "_NET_WM_STATE_MAXIMIZED_HORZ", True);
+                        LOG_INFO(QString("X11 atoms initialized: _NET_WM_STATE=%1, MAX_VERT=%2, MAX_HORZ=%3")
+                            .arg(netWmState).arg(netWmStateMaxVert).arg(netWmStateMaxHorz));
+                    }
+                    
+                    // 检查是否是 _NET_WM_STATE 属性变化
+                    if (static_cast<Atom>(propEvent->atom) == netWmState) {
+                        // 查询窗口属性
+                        Atom actualType;
+                        int actualFormat;
+                        unsigned long numItems, bytesAfter;
+                        unsigned char *propData = nullptr;
+                        
+                        bool hasMaxVert = false;
+                        bool hasMaxHorz = false;
+                        
+                        if (XGetWindowProperty(display, winIdX11, netWmState, 0, 1024, 
+                                               False, XA_ATOM, &actualType, &actualFormat,
+                                               &numItems, &bytesAfter, &propData) == Success) {
+                            if (actualType == XA_ATOM && propData) {
+                                Atom *atoms = reinterpret_cast<Atom*>(propData);
+                                for (unsigned long i = 0; i < numItems; i++) {
+                                    if (atoms[i] == netWmStateMaxVert) hasMaxVert = true;
+                                    if (atoms[i] == netWmStateMaxHorz) hasMaxHorz = true;
+                                }
+                                XFree(propData);
+                            }
+                        }
+                        
+                        bool currentlyMaximized = hasMaxVert && hasMaxHorz;
+                        
+                        LOG_INFO(QString("X11 state: hasMaxVert=%1, hasMaxHorz=%2, isMaximized=%3, wasMaximized=%4, QtMaximized=%5")
+                            .arg(hasMaxVert ? "true" : "false")
+                            .arg(hasMaxHorz ? "true" : "false")
+                            .arg(currentlyMaximized ? "true" : "false")
+                            .arg(m_wasMaximized ? "true" : "false")
+                            .arg(isMaximized() ? "true" : "false"));
+                        
+                        // 检测从最大化到非最大化的转换
+                        // 使用 Qt 的 isMaximized() 作为参考，因为它反映了当前窗口的实际状态
+                        bool qtCurrentlyMaximized = isMaximized();
+                        
+                        if (m_wasMaximized && !currentlyMaximized && !qtCurrentlyMaximized) {
+                            LOG_INFO("Window restore detected via X11! Applying fix.");
+                            
+                            // 延迟执行，确保窗口管理器完成操作
+                            QTimer::singleShot(50, this, [this]() {
+                                // 再次确认窗口状态
+                                if (!isMaximized() && !m_normalGeometry.isNull()) {
+                                    showNormal();
+                                    setGeometry(m_normalGeometry);
+                                    LOG_INFO(QString("X11 fix: Restored to x=%1, y=%2, w=%3, h=%4")
+                                        .arg(m_normalGeometry.x()).arg(m_normalGeometry.y())
+                                        .arg(m_normalGeometry.width()).arg(m_normalGeometry.height()));
+                                }
+                            });
+                        }
+                        
+                        // 只有当状态真正改变时才更新
+                        if (currentlyMaximized != m_wasMaximized) {
+                            m_wasMaximized = currentlyMaximized;
+                        }
+                    }
+                    
+                    XCloseDisplay(display);
+                }
+            }
+        }
+    }
+#else
+    Q_UNUSED(eventType);
+    Q_UNUSED(message);
+    Q_UNUSED(result);
+#endif
+    
+    return QMainWindow::nativeEvent(eventType, message, result);
+}
+
 QString MainWindow::formatSize(qint64 bytes)
 {
     const qint64 KB = 1024;
@@ -907,4 +1325,187 @@ QString MainWindow::formatSize(qint64 bytes)
     } else {
         return QString("%1 B").arg(bytes);
     }
+}
+
+#ifdef HAVE_X11
+// 检查X11窗口状态 - 直接查询_X11窗口属性
+bool MainWindow::checkX11WindowState()
+{
+    Display *display = XOpenDisplay(nullptr);
+    if (!display) return isMaximized();
+    
+    Window winIdX11 = static_cast<Window>(winId());
+    
+    // 获取原子
+    static Atom netWmState = None;
+    static Atom netWmStateMaxVert = None;
+    static Atom netWmStateMaxHorz = None;
+    static bool atomsInitialized = false;
+    
+    if (!atomsInitialized) {
+        atomsInitialized = true;
+        netWmState = XInternAtom(display, "_NET_WM_STATE", True);
+        netWmStateMaxVert = XInternAtom(display, "_NET_WM_STATE_MAXIMIZED_VERT", True);
+        netWmStateMaxHorz = XInternAtom(display, "_NET_WM_STATE_MAXIMIZED_HORZ", True);
+    }
+    
+    bool hasMaxVert = false;
+    bool hasMaxHorz = false;
+    
+    Atom actualType;
+    int actualFormat;
+    unsigned long numItems, bytesAfter;
+    unsigned char *propData = nullptr;
+    
+    if (XGetWindowProperty(display, winIdX11, netWmState, 0, 1024, 
+                           False, XA_ATOM, &actualType, &actualFormat,
+                           &numItems, &bytesAfter, &propData) == Success) {
+        if (actualType == XA_ATOM && propData) {
+            Atom *atoms = reinterpret_cast<Atom*>(propData);
+            for (unsigned long i = 0; i < numItems; i++) {
+                if (atoms[i] == netWmStateMaxVert) hasMaxVert = true;
+                if (atoms[i] == netWmStateMaxHorz) hasMaxHorz = true;
+            }
+            XFree(propData);
+        }
+    }
+    
+    XCloseDisplay(display);
+    return hasMaxVert && hasMaxHorz;
+}
+#else
+bool MainWindow::checkX11WindowState()
+{
+    return isMaximized();
+}
+#endif
+
+// DDE窗口状态检测定时器回调
+// 这是解决DDE窗口最大化后无法还原问题的关键workaround
+void MainWindow::onWindowStateCheck()
+{
+#ifdef HAVE_X11
+    // 通过X11直接查询窗口状态
+    bool x11Maximized = checkX11WindowState();
+    bool qtMaximized = isMaximized();
+    QRect currentGeo = geometry();
+    
+    // 检测状态变化：从最大化变为非最大化
+    if (m_lastX11MaximizedState && !x11Maximized) {
+        LOG_INFO(QString("DDE TIMER: Restore detected via X11 state! X11=%1, Qt=%2")
+            .arg(x11Maximized ? "max" : "normal")
+            .arg(qtMaximized ? "max" : "normal"));
+        
+        // 触发还原
+        QTimer::singleShot(10, this, [this]() {
+            if (!m_normalGeometry.isNull()) {
+                showNormal();
+                setGeometry(m_normalGeometry);
+                LOG_INFO(QString("DDE TIMER FIX: Restored to x=%1, y=%2, w=%3, h=%4")
+                    .arg(m_normalGeometry.x()).arg(m_normalGeometry.y())
+                    .arg(m_normalGeometry.width()).arg(m_normalGeometry.height()));
+            }
+        });
+        
+        m_wasMaximized = false;
+    }
+    // 方案2：检测几何变化 - 当窗口从最大化状态开始改变大小时
+    else if (m_wasMaximized && !m_lastGeometry.isNull()) {
+        // 如果几何信息发生变化，且不再是全屏大小
+        if (currentGeo != m_lastGeometry && !x11Maximized) {
+            QScreen *screen = QGuiApplication::primaryScreen();
+            if (screen) {
+                QRect screenGeo = screen->availableGeometry();
+                // 如果当前几何不是屏幕大小，说明正在还原
+                if (currentGeo.width() < screenGeo.width() - 10 || 
+                    currentGeo.height() < screenGeo.height() - 10) {
+                    LOG_INFO(QString("DDE TIMER: Restore detected via geometry change! geo=%1,%2 %3x%4")
+                        .arg(currentGeo.x()).arg(currentGeo.y())
+                        .arg(currentGeo.width()).arg(currentGeo.height()));
+                    
+                    // 强制完成还原
+                    QTimer::singleShot(10, this, [this]() {
+                        showNormal();
+                        if (!m_normalGeometry.isNull()) {
+                            setGeometry(m_normalGeometry);
+                        }
+                        m_wasMaximized = false;
+                    });
+                }
+            }
+        }
+    }
+    
+    // 更新状态
+    m_lastX11MaximizedState = x11Maximized;
+    m_wasMaximized = x11Maximized;
+    m_lastGeometry = currentGeo;
+#else
+    Q_UNUSED(this);
+#endif
+}
+
+// DDE还原按钮悬停检测
+// 当鼠标悬停在标题栏还原按钮区域约1秒后，自动触发F11还原
+void MainWindow::checkRestoreButtonHover()
+{
+    // 只在最大化状态下检测
+    if (!isMaximized()) {
+        m_restoreHoverTriggered = false;
+        return;
+    }
+    
+    // 获取全局鼠标位置
+    QPoint globalMousePos = QCursor::pos();
+    QPoint localMousePos = mapFromGlobal(globalMousePos);
+    
+    // 计算还原按钮区域
+    // DDE标题栏还原按钮大约在窗口右上角，宽度约40-50像素，高度约30-40像素
+    int windowWidth = width();
+    
+    // 还原按钮区域：右上角，x从width-90到width-30，y从-40到0（标题栏在窗口上方）
+    int buttonLeft = windowWidth - 100;
+    int buttonRight = windowWidth - 40;
+    int buttonTop = -45;
+    int buttonBottom = -5;
+    
+    bool inRestoreButtonArea = (localMousePos.x() >= buttonLeft && 
+                                 localMousePos.x() <= buttonRight &&
+                                 localMousePos.y() >= buttonTop && 
+                                 localMousePos.y() <= buttonBottom);
+    
+    static QElapsedTimer hoverTimer;
+    static bool hoverStarted = false;
+    
+    if (inRestoreButtonArea) {
+        if (!hoverStarted) {
+            hoverStarted = true;
+            hoverTimer.start();
+            LOG_INFO(QString("Mouse entered restore button area: localPos=(%1,%2)")
+                .arg(localMousePos.x()).arg(localMousePos.y()));
+        } else {
+            // 检查是否悬停超过800ms
+            if (hoverTimer.elapsed() > 800 && !m_restoreHoverTriggered) {
+                m_restoreHoverTriggered = true;
+                LOG_INFO("Restore button hover detected! Triggering F11 for restore.");
+                
+                // 触发F11按键事件
+                QKeyEvent pressEvent(QEvent::KeyPress, Qt::Key_F11, Qt::NoModifier);
+                QApplication::sendEvent(this, &pressEvent);
+                QKeyEvent releaseEvent(QEvent::KeyRelease, Qt::Key_F11, Qt::NoModifier);
+                QApplication::sendEvent(this, &releaseEvent);
+                
+                // 重置状态
+                hoverStarted = false;
+            }
+        }
+    } else {
+        if (hoverStarted) {
+            LOG_INFO("Mouse left restore button area, resetting hover timer");
+        }
+        hoverStarted = false;
+        m_restoreHoverTriggered = false;
+    }
+    
+    m_lastMousePos = globalMousePos;
 }

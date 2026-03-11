@@ -68,11 +68,14 @@ protected:
     void run() override;
 
 private:
-    QList<ScanResult> scanCategory(ScanCategory category);
+    QList<ScanResult> scanCategory(ScanCategory category, const QString &categoryName,
+                                    int progressStart, int progressEnd);
     QList<ScanResult> scanDirectory(const QString &path, ScanCategory category, 
                                      const QString &displayName, bool isDangerous = false);
     QList<ScanResult> scanDirectoryWithChildren(const QString &path, ScanCategory category,
-                                                 const QString &displayName, int depth = 0);
+                                                 const QString &displayName, int depth = 0,
+                                                 int progressStart = 0, int progressEnd = 100,
+                                                 int currentItem = 0, int totalItems = 1);
     qint64 getDirectorySize(const QString &path, int *fileCount = nullptr);
     qint64 calculateDirSize(const QString &path);
     QString formatSize(qint64 bytes);
@@ -82,6 +85,11 @@ private:
     QList<ScanCategory> m_categories;
     bool m_stopRequested;
     QMutex m_mutex;
+    
+    // 进度相关
+    QString m_currentCategoryName;
+    int m_progressStart;
+    int m_progressEnd;
 };
 
 // 分析界面主组件

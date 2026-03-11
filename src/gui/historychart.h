@@ -13,6 +13,7 @@
 #include <QString>
 #include <QColor>
 #include <QList>
+#include <QPointF>
 
 // 数据点结构
 struct DataPoint {
@@ -69,8 +70,11 @@ protected:
 private:
     void initColors();
     void drawGrid(QPainter &painter, const QRectF &chartRect);
-    void drawSeries(QPainter &painter, const QRectF &chartRect);
-    void drawLegend(QPainter &painter, const QRectF &chartRect);
+    QVector<QPointF> drawSeries(QPainter &painter, const QRectF &chartRect);
+    void drawLegend(QPainter &painter, const QRectF &chartRect, const QVector<QPointF> &endPoints);
+    
+    // 计算图例需要的行数
+    int calculateLegendRows(int legendAreaWidth) const;
 
 private:
     QString m_title;
