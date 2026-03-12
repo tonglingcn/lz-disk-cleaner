@@ -407,8 +407,10 @@ QString DashboardWidget::getGPUInfo()
     
     QString output = QString::fromUtf8(process.readAllStandardOutput());
     
-    // 查找 VGA 或 3D 控制器
+    // 查找所有 VGA 或 3D 控制器
     QStringList lines = output.split('\n');
+    QStringList gpuList;
+    
     for (const QString &line : lines) {
         if (line.contains("VGA compatible controller", Qt::CaseInsensitive) ||
             line.contains("3D controller", Qt::CaseInsensitive)) {
@@ -437,7 +439,8 @@ QString DashboardWidget::getGPUInfo()
                         vendor = "Intel ";
                     }
                     
-                    return vendor + model;
+                    gpuList.append(vendor + model);
+                    continue;
                 }
                 
                 // 如果没有方括号，尝试简化
@@ -452,12 +455,17 @@ QString DashboardWidget::getGPUInfo()
                     gpuInfo = gpuInfo.left(37) + "...";
                 }
                 
-                return gpuInfo;
+                gpuList.append(gpuInfo);
             }
         }
     }
     
-    return "未检测到";
+    if (gpuList.isEmpty()) {
+        return "未检测到";
+    }
+    
+    // 将多个显卡信息用换行符分隔显示
+    return gpuList.join("\n");
 }
 
 QString DashboardWidget::getDisplayInfo()
