@@ -13,6 +13,8 @@ Build-Depends: cmake (>= 3.16),
                libqt6svg6 (>= 6.4),
                libgl1-mesa-dev | libgl-dev,
                libegl1-mesa-dev | libegl-dev,
+               libvulkan-dev,
+               libxkbcommon-dev,
                pkg-config
 Standards-Version: 4.6.2
 Homepage: https://github.com/tonglingcn/deepin-disk-cleaner
