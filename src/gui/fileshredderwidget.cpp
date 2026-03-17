@@ -83,28 +83,27 @@ void FileShredderWidget::initUI()
         "   padding: 0px; "
         "}"
     );
-    
+
     QHBoxLayout *headerLayout = new QHBoxLayout(headerCard);
     headerLayout->setContentsMargins(20, 15, 20, 15);
-    headerLayout->setSpacing(15);
-    
-    // 图标
+    headerLayout->setSpacing(10);
+
+    // 左侧：图标+ 标题
     QLabel *iconLabel = new QLabel("🗑️", this);
-    iconLabel->setStyleSheet("font-size: 36px; background: transparent;");
+    iconLabel->setStyleSheet("font-size: 24px; background: transparent;");
     headerLayout->addWidget(iconLabel);
-    
-    // 标题和说明
-    QVBoxLayout *titleLayout = new QVBoxLayout();
+
     m_titleLabel = new QLabel(tr("文件粉碎"), this);
-    m_titleLabel->setStyleSheet("font-size: 22px; font-weight: bold; color: white; background: transparent;");
-    titleLayout->addWidget(m_titleLabel);
-    
+    m_titleLabel->setStyleSheet("font-size: 20px; font-weight: bold; color: white; background: transparent;");
+    headerLayout->addWidget(m_titleLabel);
+
+    headerLayout->addStretch();
+
+    // 右侧：描述文字
     QLabel *descLabel = new QLabel(tr("安全彻底删除文件，多次覆写确保数据永久不可恢复"), this);
     descLabel->setStyleSheet("font-size: 12px; color: rgba(255,255,255,0.9); background: transparent;");
-    titleLayout->addWidget(descLabel);
-    headerLayout->addLayout(titleLayout);
-    headerLayout->addStretch();
-    
+    headerLayout->addWidget(descLabel);
+
     mainLayout->addWidget(headerCard);
 
     // ========== 拖放区域（紧凑布局）==========
@@ -166,9 +165,11 @@ void FileShredderWidget::initUI()
         "   font-size: 12px; "
         "   font-weight: 500; "
         "   padding: 6px 12px; "
+        "   outline: none; "
         "} "
-        "QPushButton:hover { background-color: #0066CC; }"
-        "QPushButton:pressed { background-color: #0052A3; }"
+        "QPushButton:hover { background-color: #0066CC; border: none; outline: none; }"
+        "QPushButton:pressed { background-color: #0052A3; border: none; outline: none; }"
+        "QPushButton:focus { outline: none; border: none; }"
     );
     connect(m_addFilesBtn, &QPushButton::clicked, this, &FileShredderWidget::onAddFilesClicked);
     buttonLayout->addWidget(m_addFilesBtn);
@@ -394,20 +395,13 @@ void FileShredderWidget::initUI()
     privilegeIcon->setStyleSheet("font-size: 20px; background: transparent;");
     privilegeIcon->setFixedWidth(28);
     privilegeLayout->addWidget(privilegeIcon);
-    
-    // 文字说明
-    QVBoxLayout *textLayout = new QVBoxLayout();
-    textLayout->setSpacing(2);
-    
-    QLabel *privilegeTitle = new QLabel(tr("权限提升"), this);
+
+    // 标题（包含描述文字）
+    QLabel *privilegeTitle = new QLabel(tr("权限提升（处理只读、root权限、immutable属性等顽固文件）"), this);
     privilegeTitle->setStyleSheet("font-size: 13px; font-weight: bold; color: #2C3E50; background: transparent;");
-    textLayout->addWidget(privilegeTitle);
-    
-    QLabel *privilegeDesc = new QLabel(tr("处理只读、root权限、immutable属性等顽固文件"), this);
-    privilegeDesc->setStyleSheet("font-size: 11px; color: #7F8C8D; background: transparent;");
-    textLayout->addWidget(privilegeDesc);
-    
-    privilegeLayout->addLayout(textLayout, 1);  // 让文字区域占据剩余空间
+    privilegeLayout->addWidget(privilegeTitle);
+
+    privilegeLayout->addStretch();
     privilegeLayout->addStretch();
     
     // 右侧容器：状态标签 + 开关
@@ -473,37 +467,27 @@ void FileShredderWidget::initUI()
     mainLayout->addWidget(privilegeCard);
 
     // 警告标签
-    QFrame *warningFrame = new QFrame(this);
-    warningFrame->setStyleSheet(
-        "QFrame { "
-        "   background-color: rgba(231, 76, 60, 0.08); "
-        "   border: 1px solid #E74C3C; "
-        "   border-radius: 8px; "
-        "}"
-    );
-    
-    QHBoxLayout *warningLayout = new QHBoxLayout(warningFrame);
-    warningLayout->setContentsMargins(15, 12, 15, 12);
-    
+    m_warningFrame = new QFrame(this);
+    m_warningFrame->setObjectName("warningFrame");
+
+    QHBoxLayout *warningLayout = new QHBoxLayout(m_warningFrame);
+    warningLayout->setContentsMargins(15, 6, 15, 6);
+
     warningLayout->addStretch();
-    
+
     QLabel *warningIcon = new QLabel("⚠️", this);
-    warningIcon->setStyleSheet("font-size: 20px; background: transparent;");
+    warningIcon->setObjectName("warningIcon");
+    warningIcon->setStyleSheet("font-size: 16px; background: transparent;");
     warningLayout->addWidget(warningIcon);
-    
-    QLabel *warningLabel = new QLabel(
+
+    m_warningLabel = new QLabel(
         tr("警告：文件粉碎后无法恢复！此操作不可逆，请谨慎操作！"), this);
-    warningLabel->setStyleSheet(
-        "font-size: 13px; "
-        "font-weight: bold; "
-        "color: #C0392B; "
-        "background: transparent; "
-    );
-    warningLayout->addWidget(warningLabel);
-    
+    m_warningLabel->setObjectName("warningLabel");
+    warningLayout->addWidget(m_warningLabel);
+
     warningLayout->addStretch();
-    
-    mainLayout->addWidget(warningFrame);
+
+    mainLayout->addWidget(m_warningFrame);
 }
 
 void FileShredderWidget::dragEnterEvent(QDragEnterEvent *event)
@@ -831,10 +815,38 @@ void FileShredderWidget::applyTheme()
             "QListWidget { background-color: #3d3d3d; color: #e0e0e0; border: 1px solid #555; }"
             "QListWidget::item:selected { background-color: #4a90d9; }"
         );
+        // 深色主题下警告框样式
+        m_warningFrame->setStyleSheet(
+            "QFrame#warningFrame { "
+            "   background-color: rgba(231, 76, 60, 0.25); "
+            "   border: 2px solid #E74C3C; "
+            "   border-radius: 8px; "
+            "}"
+        );
+        m_warningLabel->setStyleSheet(
+            "font-size: 13px; "
+            "font-weight: bold; "
+            "color: #FF6B6B; "
+            "background: transparent; "
+        );
     } else {
         setStyleSheet(
             "FileShredderWidget { background-color: #F5F5F5; }"
             "QLabel { color: #333; }"
+        );
+        // 浅色主题下警告框样式
+        m_warningFrame->setStyleSheet(
+            "QFrame#warningFrame { "
+            "   background-color: rgba(231, 76, 60, 0.08); "
+            "   border: 1px solid #E74C3C; "
+            "   border-radius: 8px; "
+            "}"
+        );
+        m_warningLabel->setStyleSheet(
+            "font-size: 13px; "
+            "font-weight: bold; "
+            "color: #C0392B; "
+            "background: transparent; "
         );
     }
 }

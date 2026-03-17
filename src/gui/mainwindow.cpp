@@ -5,6 +5,7 @@
 
 #include "mainwindow.h"
 #include "analyzewidget.h"
+#include "../core/systeminfo.h"
 #include "../utils/logger.h"
 #include "../utils/config.h"
 #include <QMenuBar>
@@ -106,8 +107,10 @@ MainWindow::~MainWindow()
 
 void MainWindow::initUI()
 {
-    // 设置窗口属性
-    setWindowTitle(tr("磁盘清理工具-Deepin版"));
+    // 获取发行版名称，设置动态标题
+    SystemInfo sysInfo;
+    QString distroName = sysInfo.getDistroName();
+    setWindowTitle(tr("磁盘清理工具-%1版").arg(distroName));
     setMinimumSize(900, 700);
     
     // 根据屏幕分辨率智能设置窗口大小
@@ -169,6 +172,14 @@ void MainWindow::initUI()
     // 系统瘦身页面
     m_systemSlimmerWidget = new SystemSlimmerWidget(this);
     m_tabWidget->addTab(m_systemSlimmerWidget, tr("系统瘦身"));
+    
+    // 自启动管理页面
+    m_startupAppsWidget = new StartupAppsWidget(this);
+    m_tabWidget->addTab(m_startupAppsWidget, tr("自启动"));
+    
+    // APT 源管理页面
+    m_aptSourceManagerWidget = new APTSourceManagerWidget(this);
+    m_tabWidget->addTab(m_aptSourceManagerWidget, tr("源管理"));
     
     mainLayout->addWidget(m_tabWidget, 1);
     
@@ -465,19 +476,8 @@ void MainWindow::connectSignals()
 
 void MainWindow::applyTheme()
 {
-    Config *config = Config::instance();
-    
-    if (config->getDarkMode()) {
-        qApp->setStyleSheet(
-            "QMainWindow { background-color: #2b2b2b; } "
-            "QWidget { color: #ffffff; } "
-            "QTabWidget::pane { border: 1px solid #444; } "
-            "QTabBar::tab { background-color: #3b3b3b; color: #aaa; padding: 8px; } "
-            "QTabBar::tab:selected { background-color: #2b2b2b; color: #fff; }"
-        );
-    } else {
-        qApp->setStyleSheet("");
-    }
+    // 使用系统默认主题
+    qApp->setStyleSheet("");
 }
 
 void MainWindow::onAnalyzeClicked()
@@ -585,18 +585,29 @@ void MainWindow::onCustomCleanupClicked()
 void MainWindow::onSettingsClicked()
 {
     LOG_INFO("Settings button clicked");
-    // TODO: 实现设置对话框
-    QMessageBox::information(this, tr("设置"), tr("设置功能开发中..."));
+    
+    SettingsDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        // 应用主题变更
+        applyTheme();
+        LOG_INFO("Settings applied");
+    }
 }
 
 void MainWindow::onAboutClicked()
 {
     LOG_INFO("About button clicked");
+
+    // 获取发行版名称
+    SystemInfo sysInfo;
+    QString distroName = sysInfo.getDistroName();
+
     QMessageBox::about(
         this,
-        tr("关于 磁盘清理工具-Deepin版"),
-        tr("<h3>磁盘清理工具-Deepin版 v1.0.0</h3>"
-           "<p>一个专为 Deepin V25 系统设计的磁盘清理工具。</p>"
+        tr("关于"),
+        tr("<h3>磁盘清理工具-%1版</h3>"
+           "<p><b>版本号：</b>v1.1.0</p>"
+           "<p>一个专为 %2 系统设计的磁盘清理工具。</p>"
            "<p><b>功能特性：</b></p>"
            "<ul>"
            "<li>磁盘使用分析</li>"
@@ -609,6 +620,8 @@ void MainWindow::onAboutClicked()
            "</ul>"
            "<p><b>技术栈：</b> C++17 + Qt6</p>"
            "<p align=\"center\">Copyright © 2026 克亮 UOS-AI</p>")
+        .arg(distroName)
+        .arg(distroName)
     );
 }
 
@@ -905,8 +918,29 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
         }
         QApplication::processEvents();
         
+        // 从配置获取参数
+        Config *config = Config::instance();
+        int keepDays = config->getJournalKeepDays();
+        int keepCount = config->getSnapshotKeepCount();
+        
+        // 判断是否需要清理 journal 日志或系统快照
+        bool needCleanJournal = false;
+        bool needCleanSnapshot = false;
+        for (const ScanResult &item : privilegedItems) {
+            if (item.category == ScanCategory::JOURNAL_LOGS) {
+                needCleanJournal = true;
+            }
+            if (item.category == ScanCategory::IMMUTABLE_SNAPSHOTS) {
+                needCleanSnapshot = true;
+            }
+        }
+        
         QStringList pkexecArgs;
         pkexecArgs << helperPath;
+        
+        // 传递日志保留天数参数
+        pkexecArgs << "--keep-days" << QString::number(keepDays);
+        pkexecArgs << "--keep-count" << QString::number(keepCount);
         
         if (needCleanAptCache) {
             pkexecArgs << "--apt-cache";
@@ -914,8 +948,21 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
         if (needCleanSystemLogs) {
             pkexecArgs << "--system-logs";
         }
-        if (!privilegedDeletePaths.isEmpty()) {
-            pkexecArgs << "--delete" << privilegedDeletePaths;
+        if (needCleanJournal) {
+            pkexecArgs << "--journal";
+        }
+        if (needCleanSnapshot) {
+            pkexecArgs << "--snapshot";
+        }
+        
+        // 收集需要删除的路径（排除 journal 和 snapshot 类型，它们通过专用选项处理）
+        QStringList deletePaths;
+        for (const QString &path : privilegedDeletePaths) {
+            deletePaths.append(path);
+        }
+        
+        if (!deletePaths.isEmpty()) {
+            pkexecArgs << "--delete" << deletePaths;
         }
         
         LOG_INFO(QString("Executing privileged cleanup: pkexec %1").arg(pkexecArgs.join(" ")));

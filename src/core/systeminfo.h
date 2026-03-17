@@ -45,6 +45,9 @@ public:
     
     bool isImmutableSystem();
     bool isLinglongAvailable();
+
+    // 获取发行版标识名称（用于标题显示）
+    QString getDistroName();
     
 private:
     QString readFileContent(const QString &path);

@@ -18,6 +18,8 @@
 #include <QVBoxLayout>
 
 #include "historychart.h"
+#include "temperaturewidget.h"
+#include "../core/hardwaremonitor.h"
 
 // 系统资源数据结构
 struct CpuData {
@@ -66,6 +68,7 @@ private slots:
     void updateNetworkChart();
     void updateDiskInfo();
     void updateDiskStructure();
+    void updateTemperatures();
 
 private:
     void initUI();
@@ -91,6 +94,9 @@ private:
     HistoryChart *m_cpuChart;
     HistoryChart *m_memoryChart;
     HistoryChart *m_networkChart;
+    
+    // 硬件温度组件
+    TemperatureWidget *m_temperatureWidget;
     
     // 磁盘信息表格
     QTableWidget *m_diskInfoTable;

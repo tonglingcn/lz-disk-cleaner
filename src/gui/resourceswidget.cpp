@@ -7,6 +7,7 @@
 
 #include "resourceswidget.h"
 #include "../utils/logger.h"
+#include "../core/hardwaremonitor.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -30,6 +31,7 @@ ResourcesWidget::ResourcesWidget(QWidget *parent)
     , m_cpuChart(nullptr)
     , m_memoryChart(nullptr)
     , m_networkChart(nullptr)
+    , m_temperatureWidget(nullptr)
     , m_diskInfoTable(nullptr)
     , m_diskStructureTable(nullptr)
     , m_lastNetworkRx(0)
@@ -56,15 +58,22 @@ void ResourcesWidget::initDataCollectors()
     // m_cpuCoreCount = 24;  // 测试24核
     // m_cpuCoreCount = 32;  // 测试32核
     // ===================================================================================
-    
-    // 读取实际CPU核心数
+
+    // 读取实际CPU核心数（兼容不同架构的 /proc/cpuinfo 格式）
     QFile cpuInfo("/proc/cpuinfo");
     if (cpuInfo.open(QIODevice::ReadOnly)) {
         QTextStream in(&cpuInfo);
         QString content = in.readAll();
         cpuInfo.close();
-        
-        int count = content.count("processor\t:");
+
+        // 兼容不同格式：processor\t: / processor : / processor:
+        QRegularExpression re("processor\\s*[:：]", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpressionMatchIterator it = re.globalMatch(content);
+        int count = 0;
+        while (it.hasNext()) {
+            it.next();
+            count++;
+        }
         m_cpuCoreCount = qMax(1, count);
     }
 
@@ -114,6 +123,10 @@ void ResourcesWidget::initUI()
     QVBoxLayout *scrollLayout = new QVBoxLayout(scrollContent);
     scrollLayout->setSpacing(15);
     scrollLayout->setContentsMargins(5, 5, 5, 5);
+
+    // 硬件温度监控组件
+    m_temperatureWidget = new TemperatureWidget(this);
+    scrollLayout->addWidget(m_temperatureWidget);
 
     // CPU 使用率图表
     m_cpuChart = new HistoryChart(tr("💻 CPU 使用率"), m_cpuCoreCount, this);
@@ -297,6 +310,10 @@ void ResourcesWidget::startMonitoring()
     connect(m_timer, &QTimer::timeout, this, &ResourcesWidget::updateCpuChart);
     connect(m_timer, &QTimer::timeout, this, &ResourcesWidget::updateMemoryChart);
     connect(m_timer, &QTimer::timeout, this, &ResourcesWidget::updateNetworkChart);
+    connect(m_timer, &QTimer::timeout, this, &ResourcesWidget::updateTemperatures);
+    
+    // 初始更新温度
+    updateTemperatures();
     
     m_timer->start(1000);  // 1秒刷新
     m_isMonitoring = true;
@@ -943,7 +960,19 @@ void ResourcesWidget::updateDiskStructure()
     m_diskStructureTable->horizontalHeader()->setStretchLastSection(true);
 }
 
-
-
+void ResourcesWidget::updateTemperatures()
+{
+    if (!m_temperatureWidget) return;
+    
+    // 每5秒更新一次温度（温度变化较慢）
+    static int updateCounter = 5;  // 初始为5，确保第一次立即更新
+    updateCounter++;
+    if (updateCounter < 5) return;
+    updateCounter = 0;
+    
+    HardwareMonitor *monitor = HardwareMonitor::instance();
+    HardwareTemps temps = monitor->getAllTemperatures();
+    m_temperatureWidget->updateTemperatures(temps);
+}
 
 

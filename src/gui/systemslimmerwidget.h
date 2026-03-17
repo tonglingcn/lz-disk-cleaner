@@ -68,6 +68,8 @@ private slots:
     void onMoveToTrash();
     void onBackToMain();
     void onFeatureCardToggled();
+    void onLargeFileContextMenu(const QPoint &pos);
+    void onDuplicateFileContextMenu(const QPoint &pos);
 
 private:
     void initUI();

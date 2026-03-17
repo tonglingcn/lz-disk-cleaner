@@ -156,10 +156,73 @@ QString SystemInfo::getCpuModel()
     QString content = readFileContent("/proc/cpuinfo");
     QStringList lines = content.split('\n');
     
+    // 收集所有可能的CPU型号信息
+    QString cpuModel;
+    QString modelName;
+    QString systemType;
+    QString hardware;
+    QString processor;
+    
     for (const QString &line : lines) {
-        if (line.startsWith("model name")) {
-            return line.split(':').last().trimmed();
+        QString trimmedLine = line.trimmed();
+        
+        // 使用正则表达式匹配各种格式的字段名
+        QRegularExpressionMatch match;
+        
+        // 匹配 "cpu model" 或 "CPU model" (龙芯/LoongArch)
+        QRegularExpression cpuModelRe("^[Cc][Pp][Uu]\\s+[Mm]odel\\s*:", QRegularExpression::CaseInsensitiveOption);
+        if ((match = cpuModelRe.match(trimmedLine)).hasMatch()) {
+            QString value = trimmedLine.split(':').last().trimmed();
+            if (!value.isEmpty() && !value.contains("generic", Qt::CaseInsensitive)) {
+                cpuModel = value;
+            }
         }
+        
+        // 匹配 "model name" (x86)
+        QRegularExpression modelNameRe("^[Mm]odel\\s+[Nn]ame\\s*:", QRegularExpression::CaseInsensitiveOption);
+        if ((match = modelNameRe.match(trimmedLine)).hasMatch()) {
+            QString value = trimmedLine.split(':').last().trimmed();
+            if (!value.isEmpty()) {
+                modelName = value;
+            }
+        }
+        
+        // 匹配 "system type" (备用)
+        QRegularExpression systemTypeRe("^[Ss]ystem\\s+[Tt]ype\\s*:", QRegularExpression::CaseInsensitiveOption);
+        if ((match = systemTypeRe.match(trimmedLine)).hasMatch()) {
+            QString value = trimmedLine.split(':').last().trimmed();
+            if (!value.isEmpty()) {
+                systemType = value;
+            }
+        }
+        
+        // 匹配 "Hardware" (ARM)
+        QRegularExpression hardwareRe("^[Hh]ardware\\s*:", QRegularExpression::CaseInsensitiveOption);
+        if ((match = hardwareRe.match(trimmedLine)).hasMatch()) {
+            QString value = trimmedLine.split(':').last().trimmed();
+            if (!value.isEmpty()) {
+                hardware = value;
+            }
+        }
+        
+        // 匹配 "Processor" (ARM/RISC-V)
+        QRegularExpression processorRe("^[Pp]rocessor\\s*:", QRegularExpression::CaseInsensitiveOption);
+        // 注意：Processor 后面通常是数字(如 processor : 0)，跳过纯数字
+        if ((match = processorRe.match(trimmedLine)).hasMatch()) {
+            QString value = trimmedLine.split(':').last().trimmed();
+            if (!value.isEmpty() && !value.toInt()) {  // 不是纯数字
+                processor = value;
+            }
+        }
+    }
+    
+    // 按优先级返回
+    if (!cpuModel.isEmpty()) return cpuModel;           // 龙芯优先
+    if (!modelName.isEmpty()) return modelName;         // x86
+    if (!hardware.isEmpty()) return hardware;           // ARM
+    if (!processor.isEmpty()) return processor;         // 其他
+    if (!systemType.isEmpty() && !systemType.contains("generic", Qt::CaseInsensitive)) {
+        return systemType;                               // 备用
     }
     
     return "Unknown";
@@ -215,6 +278,90 @@ QString SystemInfo::executeCommand(const QString &command)
     QProcess process;
     process.start("bash", QStringList() << "-c" << command);
     process.waitForFinished();
-    
+
     return QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+}
+
+QString SystemInfo::getDistroName()
+{
+    QString content = readFileContent("/etc/os-release");
+    if (content.isEmpty()) {
+        return "Linux";
+    }
+
+    QStringList lines = content.split('\n');
+    QString id;
+    QString versionId;
+    QString prettyName;
+
+    for (const QString &line : lines) {
+        if (line.startsWith("ID=")) {
+            id = line.mid(3).remove('"').trimmed();
+        } else if (line.startsWith("VERSION_ID=")) {
+            versionId = line.mid(11).remove('"').trimmed();
+        } else if (line.startsWith("PRETTY_NAME=")) {
+            prettyName = line.mid(12).remove('"').trimmed();
+        }
+    }
+
+    // 发行版名称映射表
+    QMap<QString, QString> distroNames = {
+        {"deepin", "Deepin"},
+        {"uos", "UOS"},
+        {"debian", "Debian"},
+        {"ubuntu", "Ubuntu"},
+        {"fedora", "Fedora"},
+        {"centos", "CentOS"},
+        {"arch", "Arch Linux"},
+        {"manjaro", "Manjaro"},
+        {"opensuse-tumbleweed", "openSUSE"},
+        {"opensuse-leap", "openSUSE"},
+        {"linuxmint", "Linux Mint"},
+        {"elementary", "elementary OS"},
+        {"kali", "Kali Linux"},
+        {"gentoo", "Gentoo"},
+        {"slackware", "Slackware"},
+        {"redhat", "RHEL"},
+        {"rhel", "RHEL"},
+        {"almalinux", "AlmaLinux"},
+        {"rocky", "Rocky Linux"},
+        {"kylin", "Kylin"},
+        {"uniontech", "UOS"}
+    };
+
+    // 获取发行版显示名称
+    QString distroDisplay;
+    if (distroNames.contains(id)) {
+        distroDisplay = distroNames[id];
+    } else if (!id.isEmpty()) {
+        // 首字母大写
+        distroDisplay = id.at(0).toUpper() + id.mid(1);
+    } else {
+        distroDisplay = "Linux";
+    }
+
+    // 特殊处理 Deepin/UOS 版本号
+    if (id == "deepin" || id == "uos" || id == "uniontech") {
+        if (!versionId.isEmpty()) {
+            // Deepin 版本号映射
+            if (versionId == "23") {
+                return distroDisplay + " V23";
+            } else if (versionId == "25") {
+                return distroDisplay + " V25";
+            } else if (versionId.startsWith("20")) {
+                // UOS 20 系列
+                return distroDisplay + " " + versionId;
+            } else {
+                return distroDisplay + " " + versionId;
+            }
+        }
+        return distroDisplay;
+    }
+
+    // 其他发行版直接加上版本号
+    if (!versionId.isEmpty()) {
+        return distroDisplay + " " + versionId;
+    }
+
+    return distroDisplay;
 }

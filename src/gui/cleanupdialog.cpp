@@ -477,44 +477,58 @@ void CleanupDialog::createScanResultPage()
 void CleanupDialog::applyTheme()
 {
     bool dark = isDarkTheme();
-    
+
     QString tableStyle;
     QString treeStyle;
     QString groupStyle;
-    
+
+    // 基础样式 - 去除焦点边框
+    QString baseTableStyle =
+        "QTableWidget { outline: none; } "
+        "QTableWidget::item { padding: 5px; outline: none; border: none; } "
+        "QTableWidget::item:selected { outline: none; border: none; } "
+        "QTableWidget::item:focus { outline: none; border: none; } "
+        "QCheckBox:focus { outline: none; } "
+        "QPushButton:focus { outline: none; } ";
+
+    QString baseTreeStyle =
+        "QTreeWidget { outline: none; } "
+        "QTreeWidget::item { padding: 3px; outline: none; } "
+        "QTreeWidget::item:selected { outline: none; border: none; } "
+        "QTreeWidget::item:focus { outline: none; border: none; } "
+        "QCheckBox:focus { outline: none; } ";
+
     if (dark) {
-        tableStyle = 
+        tableStyle = baseTableStyle +
             "QTableWidget { "
             "   background-color: #2d2d2d; "
             "   color: #e0e0e0; "
             "   gridline-color: #444; "
             "   border: 1px solid #444; "
             "} "
-            "QTableWidget::item { padding: 5px; } "
-            "QTableWidget::item:selected { background-color: #3d5a80; } "
+            "QTableWidget::item:selected { background-color: #3d5a80; border: none; } "
             "QHeaderView::section { "
             "   background-color: #3d3d3d; "
             "   color: #e0e0e0; "
             "   padding: 5px; "
             "   border: 1px solid #444; "
             "}";
-            
-        treeStyle = 
+
+        treeStyle = baseTreeStyle +
             "QTreeWidget { "
             "   background-color: #2d2d2d; "
             "   color: #e0e0e0; "
             "   border: 1px solid #444; "
             "} "
-            "QTreeWidget::item { padding: 3px; } "
-            "QTreeWidget::item:selected { background-color: #3d5a80; } "
+            "QTreeWidget::item:selected { background-color: #3d5a80; border: none; } "
             "QHeaderView::section { "
             "   background-color: #3d3d3d; "
             "   color: #e0e0e0; "
             "   padding: 5px; "
             "   border: 1px solid #444; "
             "}";
-            
-        groupStyle = 
+
+        groupStyle =
             "QGroupBox { "
             "   color: #e0e0e0; "
             "   border: 1px solid #555; "
@@ -527,14 +541,54 @@ void CleanupDialog::applyTheme()
             "   left: 10px; "
             "   padding: 0 5px; "
             "}";
-            
+
         m_partitionInfoLabel->setStyleSheet("color: #aaa;");
         m_scanInfoLabel->setStyleSheet("color: #aaa;");
+    } else {
+        // 浅色主题也要添加去除焦点边框的样式，并确保选中时复选框可见
+        tableStyle = baseTableStyle +
+            "QTableWidget { "
+            "   background-color: #ffffff; "
+            "   color: #333333; "
+            "   gridline-color: #e0e0e0; "
+            "   border: 1px solid #ddd; "
+            "} "
+            "QTableWidget::item:selected { "
+            "   background-color: #4a90d9; "
+            "   color: #ffffff; "
+            "   border: none; "
+            "} "
+            "QHeaderView::section { "
+            "   background-color: #f5f5f5; "
+            "   color: #333333; "
+            "   padding: 5px; "
+            "   border: 1px solid #ddd; "
+            "   font-weight: bold; "
+            "}";
+
+        treeStyle = baseTreeStyle +
+            "QTreeWidget { "
+            "   background-color: #ffffff; "
+            "   color: #333333; "
+            "   border: 1px solid #ddd; "
+            "} "
+            "QTreeWidget::item:selected { "
+            "   background-color: #4a90d9; "
+            "   color: #ffffff; "
+            "   border: none; "
+            "} "
+            "QHeaderView::section { "
+            "   background-color: #f5f5f5; "
+            "   color: #333333; "
+            "   padding: 5px; "
+            "   border: 1px solid #ddd; "
+            "   font-weight: bold; "
+            "}";
     }
-    
+
     m_partitionTable->setStyleSheet(tableStyle);
     m_resultTree->setStyleSheet(treeStyle);
-    
+
     // 应用到所有 GroupBox
     QList<QGroupBox*> groups = findChildren<QGroupBox*>();
     for (QGroupBox *group : groups) {

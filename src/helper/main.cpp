@@ -11,6 +11,8 @@
 #include <QFile>
 #include <QDir>
 #include <QDebug>
+#include <QProcess>
+#include <QDateTime>
 #include <iostream>
 
 // 递归删除目录
@@ -104,7 +106,7 @@ bool cleanAptCache()
 }
 
 // 清理系统日志（保留最近的）
-bool cleanSystemLogs()
+bool cleanSystemLogs(int keepDays = 7)
 {
     QDir logDir("/var/log");
     if (!logDir.exists()) {
@@ -113,6 +115,7 @@ bool cleanSystemLogs()
     
     QFileInfoList entries = logDir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
     bool success = true;
+    QDateTime cutoffDate = QDateTime::currentDateTime().addDays(-keepDays);
     
     for (const QFileInfo &entry : entries) {
         QString fileName = entry.fileName();
@@ -121,23 +124,73 @@ bool cleanSystemLogs()
             continue;
         }
         
-        // 删除 .gz 和 .1 等旧日志
-        if (fileName.endsWith(".gz") || fileName.endsWith(".1") || 
-            fileName.endsWith(".old") || fileName.contains(".log.")) {
-            if (!QFile::remove(entry.absoluteFilePath())) {
-                success = false;
+        // 根据修改时间判断是否删除
+        if (entry.lastModified() < cutoffDate) {
+            // 删除 .gz 和 .1 等旧日志
+            if (fileName.endsWith(".gz") || fileName.endsWith(".1") || 
+                fileName.endsWith(".old") || fileName.contains(".log.")) {
+                if (!QFile::remove(entry.absoluteFilePath())) {
+                    success = false;
+                }
             }
         }
     }
     
+    // 清理 journal 日志
+    QProcess journalProcess;
+    QString vacuumCmd = QString("journalctl --vacuum-time=%1d").arg(keepDays);
+    journalProcess.start("bash", QStringList() << "-c" << vacuumCmd);
+    journalProcess.waitForFinished(30000);
+    
     return success;
+}
+
+// 清理 journal 日志
+bool cleanJournalLogs(int keepDays = 7)
+{
+    QProcess process;
+    QString cmd = QString("journalctl --vacuum-time=%1d").arg(keepDays);
+    process.start("bash", QStringList() << "-c" << cmd);
+    process.waitForFinished(60000);
+    
+    return process.exitCode() == 0;
+}
+
+// 清理系统快照（保留指定数量）
+bool cleanSnapshots(int keepCount = 3)
+{
+    QProcess process;
+    process.start("deepin-immutable-ctl", QStringList() << "snapshot" << "list");
+    process.waitForFinished(10000);
+    
+    if (process.exitCode() != 0) {
+        // 命令不存在或执行失败，可能不是磐石系统
+        return true;
+    }
+    
+    QString output = process.readAllStandardOutput();
+    QStringList snapshots = output.split('\n', Qt::SkipEmptyParts);
+    
+    // 保留最新的 keepCount 个快照
+    int toRemove = snapshots.size() - keepCount;
+    
+    for (int i = 0; i < toRemove; ++i) {
+        QString snapshot = snapshots[i].trimmed();
+        if (snapshot.isEmpty()) continue;
+        
+        QProcess delProcess;
+        delProcess.start("deepin-immutable-ctl", QStringList() << "snapshot" << "delete" << snapshot);
+        delProcess.waitForFinished(30000);
+    }
+    
+    return true;
 }
 
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     app.setApplicationName("lz-disk-cleaner-helper");
-    app.setApplicationVersion("1.0.0");
+    app.setApplicationVersion("1.1.0");
     
     QCommandLineParser parser;
     parser.setApplicationDescription("LZ Disk Cleaner Helper - Execute privileged cleanup operations");
@@ -151,6 +204,12 @@ int main(int argc, char *argv[])
     QCommandLineOption systemLogsOption(
         QStringList() << "l" << "system-logs",
         "Clean system logs");
+    QCommandLineOption journalOption(
+        QStringList() << "j" << "journal",
+        "Clean journal logs");
+    QCommandLineOption snapshotOption(
+        QStringList() << "s" << "snapshot",
+        "Clean system snapshots");
     QCommandLineOption deleteOption(
         QStringList() << "d" << "delete",
         "Delete specific files/directories (paths as positional arguments)");
@@ -158,14 +217,30 @@ int main(int argc, char *argv[])
         QStringList() << "c" << "clear-dir",
         "Clear directory contents without removing the directory itself");
     
+    // 参数选项
+    QCommandLineOption keepDaysOption(
+        QStringList() << "keep-days",
+        "Keep logs for N days (default: 7)",
+        "days", "7");
+    QCommandLineOption keepCountOption(
+        QStringList() << "keep-count",
+        "Keep N snapshots (default: 3)",
+        "count", "3");
+    
     parser.addOption(aptCacheOption);
     parser.addOption(systemLogsOption);
+    parser.addOption(journalOption);
+    parser.addOption(snapshotOption);
     parser.addOption(deleteOption);
     parser.addOption(clearDirOption);
+    parser.addOption(keepDaysOption);
+    parser.addOption(keepCountOption);
     
     parser.process(app);
     
     bool success = true;
+    int keepDays = parser.value(keepDaysOption).toInt();
+    int keepCount = parser.value(keepCountOption).toInt();
     
     // 处理 APT 缓存清理
     if (parser.isSet(aptCacheOption)) {
@@ -180,11 +255,33 @@ int main(int argc, char *argv[])
     
     // 处理系统日志清理
     if (parser.isSet(systemLogsOption)) {
-        std::cout << "Cleaning system logs..." << std::endl;
-        if (cleanSystemLogs()) {
+        std::cout << "Cleaning system logs (keep " << keepDays << " days)..." << std::endl;
+        if (cleanSystemLogs(keepDays)) {
             std::cout << "System logs cleaned successfully" << std::endl;
         } else {
             std::cerr << "Failed to clean system logs" << std::endl;
+            success = false;
+        }
+    }
+    
+    // 处理 journal 日志清理
+    if (parser.isSet(journalOption)) {
+        std::cout << "Cleaning journal logs (keep " << keepDays << " days)..." << std::endl;
+        if (cleanJournalLogs(keepDays)) {
+            std::cout << "Journal logs cleaned successfully" << std::endl;
+        } else {
+            std::cerr << "Failed to clean journal logs" << std::endl;
+            success = false;
+        }
+    }
+    
+    // 处理系统快照清理
+    if (parser.isSet(snapshotOption)) {
+        std::cout << "Cleaning system snapshots (keep " << keepCount << ")..." << std::endl;
+        if (cleanSnapshots(keepCount)) {
+            std::cout << "System snapshots cleaned successfully" << std::endl;
+        } else {
+            std::cerr << "Failed to clean system snapshots" << std::endl;
             success = false;
         }
     }

@@ -17,6 +17,7 @@
 #include <QProgressBar>
 #include <QThread>
 #include <QCheckBox>
+#include <QFrame>
 #include "../core/fileshredder.h"
 
 class ShredWorker : public QObject
@@ -81,6 +82,8 @@ private:
     QProgressBar *m_progressBar;
     QLabel *m_totalSizeLabel;
     QCheckBox *m_privilegeCheckBox;  // 权限提升选项
+    QFrame *m_warningFrame;          // 警告框
+    QLabel *m_warningLabel;          // 警告文字
 
     // 数据
     FileShredder *m_shredder;

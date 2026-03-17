@@ -21,9 +21,14 @@
 #include <QProcess>
 #include <QDebug>
 #include <QApplication>
+#include <QPalette>
 #include <QRegularExpression>
 #include <QBrush>
 #include <QColor>
+#include <QMenu>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QClipboard>
 
 // ============================================================================
 // ScanThread Implementation
@@ -180,6 +185,14 @@ QString ScanThread::getDirectoryPurpose(const QString &path)
         return tr("🌐 Yandex浏览器缓存");
     if (dirName.contains("falkon"))
         return tr("🌐 Falkon浏览器缓存");
+    if (fullPath.contains("360.browser") || fullPath.contains("360browser"))
+        return tr("🔒 360浏览器缓存");
+    if (fullPath.contains("loongnix.lbrowser") || fullPath.contains("lbrowser"))
+        return tr("🐉 龙芯浏览器缓存");
+    if (fullPath.contains("qqbrowser"))
+        return tr("🐧 QQ浏览器缓存");
+    if (fullPath.contains("microsoft-edge") || fullPath.contains("edge"))
+        return tr("🌊 Edge浏览器缓存");
     
     // 开发工具
     if (dirName == "pip" || fullPath.contains("pip"))
@@ -453,7 +466,19 @@ QList<ScanResult> ScanThread::scanCategory(ScanCategory category, const QString 
             {homePath + "/.cache/falkon", tr("Falkon缓存")},
             {homePath + "/.config/google-chrome/Default/Cache", tr("Chrome配置")},
             {homePath + "/.config/chromium/Default/Cache", tr("Chromium配置")},
-            {homePath + "/.cache/yandex-browser", tr("Yandex浏览器")}
+            {homePath + "/.cache/yandex-browser", tr("Yandex浏览器")},
+            // 360浏览器
+            {homePath + "/.cache/com.360.browser", tr("360浏览器缓存")},
+            {homePath + "/.config/com.360.browser/Default/Cache", tr("360浏览器配置")},
+            // 龙芯浏览器
+            {homePath + "/.cache/cn.loongnix.lbrowser", tr("龙芯浏览器缓存")},
+            {homePath + "/.config/cn.loongnix.lbrowser/Default/Cache", tr("龙芯浏览器配置")},
+            // QQ浏览器
+            {homePath + "/.cache/qqbrowser", tr("QQ浏览器缓存")},
+            {homePath + "/.config/qqbrowser/Default/Cache", tr("QQ浏览器配置")},
+            // Edge浏览器
+            {homePath + "/.cache/microsoft-edge", tr("Edge浏览器缓存")},
+            {homePath + "/.config/microsoft-edge/Default/Cache", tr("Edge浏览器配置")}
         };
         
         int totalItems = browserPaths.size();
@@ -690,34 +715,136 @@ QList<ScanResult> ScanThread::scanCategory(ScanCategory category, const QString 
 
     case ScanCategory::IMMUTABLE_SNAPSHOTS: {
         QList<ScanResult> results;
-        // 检查磐石系统状态
         QProcess process;
-        process.start("deepin-immutable-ctl", QStringList() << "status");
-        if (process.waitForFinished(5000)) {
-            QString output = process.readAllStandardOutput();
-            if (output.contains("enabled") || output.contains("开启")) {
-                // 获取快照列表
-                process.start("deepin-immutable-ctl", QStringList() << "list");
-                if (process.waitForFinished(5000)) {
-                    QString snapshotOutput = process.readAllStandardOutput();
-                    QStringList lines = snapshotOutput.split('\n');
-                    for (const QString &line : lines) {
-                        if (line.isEmpty()) continue;
-                        ScanResult result;
-                        result.category = category;
-                        result.name = line.trimmed();
-                        result.path = "/.snapshots/" + line.trimmed();
-                        result.size = 0;
-                        result.fileCount = 1;
-                        result.isDirectory = true;
-                        result.isDeletable = true;
-                        result.isDangerous = true; // 快照删除是危险操作
-                        result.description = tr("磐石系统快照，删除前请确认");
-                        results.append(result);
-                    }
-                }
+        
+        // 检查 deepin-immutable-ctl 是否存在
+        process.start("which", QStringList() << "deepin-immutable-ctl");
+        if (!process.waitForFinished(3000) || process.exitCode() != 0) {
+            LOG_DEBUG("deepin-immutable-ctl not found, skipping immutable system scan");
+            return results;
+        }
+        
+        LOG_INFO("Detected immutable system tools, scanning...");
+        
+        // 1. 扫描 ostree 仓库
+        QString ostreeRepoPath = "/ostree/repo";
+        QDir ostreeRepoDir(ostreeRepoPath);
+        if (ostreeRepoDir.exists()) {
+            ScanResult ostreeResult;
+            ostreeResult.category = category;
+            ostreeResult.name = tr("OSTree 系统仓库");
+            ostreeResult.path = ostreeRepoPath;
+            ostreeResult.size = getDirectorySize(ostreeRepoPath);
+            ostreeResult.fileCount = 1;
+            ostreeResult.isDirectory = true;
+            ostreeResult.isDeletable = false; // 不能直接删除
+            ostreeResult.isDangerous = true;
+            ostreeResult.description = tr("磐石系统核心仓库，包含系统镜像");
+            results.append(ostreeResult);
+            LOG_INFO(QString("OSTree repo size: %1").arg(ostreeResult.size));
+        }
+        
+        // 2. 扫描部署目录
+        QString deployPath = "/ostree/deploy";
+        QDir deployDir(deployPath);
+        if (deployDir.exists()) {
+            ScanResult deployResult;
+            deployResult.category = category;
+            deployResult.name = tr("系统部署数据");
+            deployResult.path = deployPath;
+            deployResult.size = getDirectorySize(deployPath);
+            deployResult.fileCount = 1;
+            deployResult.isDirectory = true;
+            deployResult.isDeletable = false;
+            deployResult.isDangerous = true;
+            deployResult.description = tr("当前系统部署版本数据");
+            results.append(deployResult);
+            LOG_INFO(QString("Deploy size: %1").arg(deployResult.size));
+        }
+        
+        // 3. 扫描 debtree 目录
+        QString debtreePath = "/ostree/debtree";
+        QDir debtreeDir(debtreePath);
+        if (debtreeDir.exists()) {
+            ScanResult debtreeResult;
+            debtreeResult.category = category;
+            debtreeResult.name = tr("DEB 软件包树");
+            debtreeResult.path = debtreePath;
+            debtreeResult.size = getDirectorySize(debtreePath);
+            debtreeResult.fileCount = 1;
+            debtreeResult.isDirectory = true;
+            debtreeResult.isDeletable = false;
+            debtreeResult.isDangerous = true;
+            debtreeResult.description = tr("通过 apt 安装的软件包数据");
+            results.append(debtreeResult);
+            LOG_INFO(QString("Debtree size: %1").arg(debtreeResult.size));
+        }
+        
+        // 4. 扫描 persistent overlay 目录
+        QString overlayPath = "/root/persistent/overlay";
+        QDir overlayDir(overlayPath);
+        if (overlayDir.exists()) {
+            ScanResult overlayResult;
+            overlayResult.category = category;
+            overlayResult.name = tr("系统修改层 (Overlay)");
+            overlayResult.path = overlayPath;
+            overlayResult.size = getDirectorySize(overlayPath);
+            overlayResult.fileCount = 1;
+            overlayResult.isDirectory = true;
+            overlayResult.isDeletable = false;
+            overlayResult.isDangerous = true;
+            overlayResult.description = tr("对系统目录的修改数据 (/usr, /opt, /etc)");
+            results.append(overlayResult);
+            LOG_INFO(QString("Overlay size: %1").arg(overlayResult.size));
+        }
+        
+        // 5. 扫描 persistent ostree 目录
+        QString persistentOstreePath = "/root/persistent/ostree";
+        QDir persistentOstreeDir(persistentOstreePath);
+        if (persistentOstreeDir.exists()) {
+            ScanResult persistentResult;
+            persistentResult.category = category;
+            persistentResult.name = tr("持久化 OSTree 数据");
+            persistentResult.path = persistentOstreePath;
+            persistentResult.size = getDirectorySize(persistentOstreePath);
+            persistentResult.fileCount = 1;
+            persistentResult.isDirectory = true;
+            persistentResult.isDeletable = false;
+            persistentResult.isDangerous = true;
+            persistentResult.description = tr("持久化的系统数据");
+            results.append(persistentResult);
+            LOG_INFO(QString("Persistent ostree size: %1").arg(persistentResult.size));
+        }
+        
+        // 6. 扫描快照目录 (如果存在)
+        QString snapshotPath = "/boot/deepin-snapshots";
+        QDir snapshotDir(snapshotPath);
+        if (snapshotDir.exists()) {
+            QStringList subdirs = snapshotDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+            for (const QString &subdir : subdirs) {
+                QString fullPath = snapshotPath + "/" + subdir;
+                ScanResult snapshotResult;
+                snapshotResult.category = category;
+                snapshotResult.name = tr("系统快照: %1").arg(subdir);
+                snapshotResult.path = fullPath;
+                snapshotResult.size = getDirectorySize(fullPath);
+                snapshotResult.fileCount = 1;
+                snapshotResult.isDirectory = true;
+                snapshotResult.isDeletable = true;
+                snapshotResult.isDangerous = true;
+                snapshotResult.description = tr("磐石系统快照，可安全删除");
+                results.append(snapshotResult);
             }
         }
+        
+        // 7. 获取快照列表 (通过命令)
+        process.start("deepin-immutable-ctl", QStringList() << "snapshot" << "list");
+        if (process.waitForFinished(5000)) {
+            QString snapshotOutput = QString::fromUtf8(process.readAllStandardOutput());
+            LOG_INFO(QString("Snapshot list output: %1").arg(snapshotOutput));
+        }
+        
+        LOG_INFO(QString("Immutable system scan complete, found %1 items").arg(results.size()));
         return results;
     }
 
@@ -924,6 +1051,7 @@ AnalyzeWidget::AnalyzeWidget(QWidget *parent)
 {
     LOG_INFO("AnalyzeWidget initializing");
     initUI();
+    applyTheme();
 }
 
 AnalyzeWidget::~AnalyzeWidget()
@@ -1011,15 +1139,12 @@ void AnalyzeWidget::createInfoPage()
             "   border-radius: 8px;"
             "   padding: 10px;"
             "}"
-            "QFrame:hover {"
-            "   background-color: #bdc3c7;"
-            "}"
         );
         frame->setMinimumSize(160, 120);
         frame->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
         QVBoxLayout *frameLayout = new QVBoxLayout(frame);
-        frameLayout->setSpacing(8);
+        frameLayout->setSpacing(4);  // 缩小间距
         frameLayout->setContentsMargins(10, 10, 10, 10);
 
         QLabel *iconLabel = new QLabel(cat.icon, frame);
@@ -1158,53 +1283,7 @@ void AnalyzeWidget::createResultPage()
     m_resultTree->setColumnWidth(2, 150);  // 用途/描述
     m_resultTree->setColumnWidth(3, 200);  // 路径
     m_resultTree->setColumnWidth(4, 70);   // 状态
-    m_resultTree->setStyleSheet(
-        "QTreeWidget {"
-        "   border: 1px solid #bdc3c7;"
-        "   border-radius: 5px;"
-        "   background-color: white;"
-        "   font-size: 12px;"
-        "}"
-        "QTreeWidget::item {"
-        "   padding: 6px;"
-        "   border-bottom: 1px solid #ecf0f1;"
-        "}"
-        "QTreeWidget::item:selected {"
-        "   background-color: #3498db;"
-        "   color: white;"
-        "}"
-        "QTreeWidget::item:hover {"
-        "   background-color: #eaf2f8;"
-        "}"
-        "QHeaderView::section {"
-        "   background-color: #ecf0f1;"
-        "   padding: 8px;"
-        "   font-weight: bold;"
-        "   border: none;"
-        "   border-right: 1px solid #bdc3c7;"
-        "}"
-        "QTreeWidget::indicator {"
-        "   width: 16px;"
-        "   height: 16px;"
-        "}"
-        "QTreeWidget::indicator:unchecked {"
-        "   border: 2px solid #95a5a6;"
-        "   background: white;"
-        "   border-radius: 3px;"
-        "}"
-        "QTreeWidget::indicator:checked {"
-        "   border: 2px solid #27ae60;"
-        "   background: #27ae60;"
-        "   border-radius: 3px;"
-        "   image: url(:/icons/check.svg);"
-        "}"
-        "QTreeWidget::indicator:indeterminate {"
-        "   border: 2px solid #3498db;"
-        "   background: #3498db;"
-        "   border-radius: 3px;"
-        "   image: url(:/icons/check.svg);"
-        "}"
-    );
+    // 样式由 applyTheme() 统一设置，支持深色主题
     m_resultTree->setAnimated(true);
     m_resultTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_resultTree->setAlternatingRowColors(true);
@@ -1213,6 +1292,11 @@ void AnalyzeWidget::createResultPage()
     m_resultTree->header()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     
     connect(m_resultTree, &QTreeWidget::itemChanged, this, &AnalyzeWidget::onTreeItemChanged);
+    
+    // 添加右键菜单支持
+    m_resultTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_resultTree, &QTreeWidget::customContextMenuRequested, this, &AnalyzeWidget::onTreeContextMenu);
+    
     layout->addWidget(m_resultTree);
 
     // 底部按钮
@@ -1738,5 +1822,180 @@ QString AnalyzeWidget::formatSize(qint64 bytes) const
         return QString("%1 KB").arg(bytes / (double)KB, 0, 'f', 2);
     } else {
         return QString("%1 B").arg(bytes);
+    }
+}
+
+void AnalyzeWidget::onTreeContextMenu(const QPoint &pos)
+{
+    // 获取被右键点击的项
+    QTreeWidgetItem *item = m_resultTree->itemAt(pos);
+    if (!item) {
+        return;
+    }
+    
+    // 获取路径（存储在 UserRole 中）
+    QString path = item->data(0, Qt::UserRole).toString();
+    if (path.isEmpty()) {
+        // 尝试从第3列（路径列）获取
+        path = item->text(3);
+    }
+    
+    if (path.isEmpty()) {
+        return;
+    }
+    
+    // 创建右键菜单
+    QMenu contextMenu(this);
+    QAction *openFolderAction = contextMenu.addAction(tr("📂 打开所在文件夹"));
+    QAction *copyPathAction = contextMenu.addAction(tr("📋 复制路径"));
+    
+    // 显示菜单并获取选中的动作
+    QAction *selectedAction = contextMenu.exec(m_resultTree->viewport()->mapToGlobal(pos));
+    
+    if (selectedAction == openFolderAction) {
+        // 打开文件夹
+        QFileInfo fileInfo(path);
+        QString dirPath = fileInfo.isDir() ? path : fileInfo.dir().absolutePath();
+        
+        LOG_INFO(QString("Opening folder: %1").arg(dirPath));
+        QDesktopServices::openUrl(QUrl::fromLocalFile(dirPath));
+    } else if (selectedAction == copyPathAction) {
+        // 复制路径到剪贴板
+        QApplication::clipboard()->setText(path);
+        LOG_INFO(QString("Path copied to clipboard: %1").arg(path));
+    }
+}
+
+bool AnalyzeWidget::isDarkTheme()
+{
+    QPalette palette = qApp->palette();
+    QColor windowColor = palette.color(QPalette::Window);
+    int brightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+    return brightness < 128;
+}
+
+void AnalyzeWidget::applyTheme()
+{
+    bool darkMode = isDarkTheme();
+
+    if (darkMode) {
+        // 深色主题样式
+        m_resultTree->setStyleSheet(
+            "QTreeWidget {"
+            "   border: 1px solid #444;"
+            "   border-radius: 5px;"
+            "   background-color: #2d2d2d;"
+            "   color: #e0e0e0;"
+            "   font-size: 12px;"
+            "   outline: none;"
+            "}"
+            "QTreeWidget::item {"
+            "   padding: 6px;"
+            "   border-bottom: 1px solid #3d3d3d;"
+            "   color: #e0e0e0;"
+            "   outline: none;"
+            "}"
+            "QTreeWidget::item:selected {"
+            "   background-color: #3d5a80;"
+            "   color: #ffffff;"
+            "   border: none;"
+            "   outline: none;"
+            "}"
+            "QTreeWidget::item:hover {"
+            "   background-color: #3d3d3d;"
+            "}"
+            "QTreeWidget::item:focus {"
+            "   outline: none;"
+            "   border: none;"
+            "}"
+            "QHeaderView::section {"
+            "   background-color: #3d3d3d;"
+            "   color: #e0e0e0;"
+            "   padding: 8px;"
+            "   font-weight: bold;"
+            "   border: none;"
+            "   border-right: 1px solid #444;"
+            "}"
+            "QTreeWidget::indicator {"
+            "   width: 16px;"
+            "   height: 16px;"
+            "}"
+            "QTreeWidget::indicator:unchecked {"
+            "   border: 2px solid #666;"
+            "   background: #2d2d2d;"
+            "   border-radius: 3px;"
+            "}"
+            "QTreeWidget::indicator:checked {"
+            "   border: 2px solid #27ae60;"
+            "   background: #27ae60;"
+            "   border-radius: 3px;"
+            "   image: url(:/icons/check.svg);"
+            "}"
+            "QTreeWidget::indicator:indeterminate {"
+            "   border: 2px solid #3498db;"
+            "   background: #3498db;"
+            "   border-radius: 3px;"
+            "   image: url(:/icons/check.svg);"
+            "}"
+        );
+        setStyleSheet("AnalyzeWidget { background-color: #2d2d2d; }");
+    } else {
+        // 浅色主题样式
+        m_resultTree->setStyleSheet(
+            "QTreeWidget {"
+            "   border: 1px solid #bdc3c7;"
+            "   border-radius: 5px;"
+            "   background-color: white;"
+            "   font-size: 12px;"
+            "   outline: none;"
+            "}"
+            "QTreeWidget::item {"
+            "   padding: 6px;"
+            "   border-bottom: 1px solid #ecf0f1;"
+            "   outline: none;"
+            "}"
+            "QTreeWidget::item:selected {"
+            "   background-color: #a8c9d1;"
+            "   color: #2C3E50;"
+            "   border: none;"
+            "   outline: none;"
+            "}"
+            "QTreeWidget::item:hover {"
+            "   background-color: #eaf2f8;"
+            "}"
+            "QTreeWidget::item:focus {"
+            "   outline: none;"
+            "   border: none;"
+            "}"
+            "QHeaderView::section {"
+            "   background-color: #ecf0f1;"
+            "   padding: 8px;"
+            "   font-weight: bold;"
+            "   border: none;"
+            "   border-right: 1px solid #bdc3c7;"
+            "}"
+            "QTreeWidget::indicator {"
+            "   width: 16px;"
+            "   height: 16px;"
+            "}"
+            "QTreeWidget::indicator:unchecked {"
+            "   border: 2px solid #95a5a6;"
+            "   background: white;"
+            "   border-radius: 3px;"
+            "}"
+            "QTreeWidget::indicator:checked {"
+            "   border: 2px solid #27ae60;"
+            "   background: #27ae60;"
+            "   border-radius: 3px;"
+            "   image: url(:/icons/check.svg);"
+            "}"
+            "QTreeWidget::indicator:indeterminate {"
+            "   border: 2px solid #3498db;"
+            "   background: #3498db;"
+            "   border-radius: 3px;"
+            "   image: url(:/icons/check.svg);"
+            "}"
+        );
+        setStyleSheet("AnalyzeWidget { background-color: #F5F5F5; }");
     }
 }

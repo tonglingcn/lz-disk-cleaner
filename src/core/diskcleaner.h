@@ -30,6 +30,7 @@ public:
     CleanupResult cleanThumbnailCache();
     CleanupResult cleanAptCache();
     CleanupResult cleanJournalLogs(int keepDays = 7);
+    CleanupResult cleanJournalLogsBySize(int maxSizeMB = 100);
     CleanupResult cleanTempFiles();
     CleanupResult cleanTrash();
     CleanupResult cleanDownloadedPackages();
@@ -56,6 +57,7 @@ private:
     qint64 getDirectorySize(const QString &path);
     bool isSafeToClean(const QString &itemName);
     QStringList getProtectedDirs();
+    bool cleanDirContent(const QString &path);  // 清理目录内容但保留目录本身
 };
 
 #endif // DISKCLEANER_H

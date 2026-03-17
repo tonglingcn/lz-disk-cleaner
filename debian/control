@@ -4,19 +4,20 @@ Priority: optional
 Maintainer: 克亮 <315707022@qq.com>
 Build-Depends: cmake (>= 3.16),
                debhelper-compat (= 13),
-               qt6-base-dev (>= 6.2),
-               qt6-base-dev-tools (>= 6.2),
-               libqt6core6 (>= 6.2),
-               libqt6gui6 (>= 6.2),
-               libqt6widgets6 (>= 6.2),
-               libqt6network6 (>= 6.2),
+               qt6-base-dev (>= 6.4),
+               qt6-base-dev-tools (>= 6.4),
+               libqt6core6 (>= 6.4),
+               libqt6gui6 (>= 6.4),
+               libqt6widgets6 (>= 6.4),
+               libqt6network6 (>= 6.4),
+               libqt6svg6 (>= 6.4),
                libgl1-mesa-dev | libgl-dev,
                libegl1-mesa-dev | libegl-dev,
                pkg-config
 Standards-Version: 4.6.2
-Homepage: https://github.com/tonglingcn/lz-disk-cleaner
-Vcs-Git: https://github.com/tonglingcn/lz-disk-cleaner.git
-Vcs-Browser: https://github.com/tonglingcn/lz-disk-cleaner
+Homepage: https://github.com/tonglingcn/deepin-disk-cleaner
+Vcs-Git: https://github.com/tonglingcn/deepin-disk-cleaner.git
+Vcs-Browser: https://github.com/tonglingcn/deepin-disk-cleaner
 
 Package: lz-disk-cleaner
 Architecture: any
@@ -25,22 +26,25 @@ Depends: ${shlibs:Depends},
          policykit-1,
          psmisc,
          lsof
-Description: Disk cleaning and optimization tool
+Recommends: fonts-noto-color-emoji
+Description: Disk cleaning and optimization tool for Deepin
  LZ Disk Cleaner is a comprehensive disk cleaning and system
- optimization tool.
+ optimization tool designed for Deepin V25.
  .
- Features:
-  - Disk usage analysis with visual charts
-  - System cache and temporary file cleaning
-  - Package cache cleaning (APT, Linglong)
-  - System log cleanup
+ Main Features:
+  - Disk usage analysis with multi-level directory scanning
+  - Smart and custom cleanup modes
+  - APT source management (add, edit, enable/disable, delete)
+  - Startup application management
   - File shredder with secure deletion
-  - System slimming and optimization
-  - Real-time resource monitoring
+  - System slimming (large files, duplicates finder)
+  - Hardware resource monitoring (CPU, Memory, Network, GPU)
   - Linglong application management
+  - Immutable system (磐石) snapshot support
+  - Support for multiple browsers cache cleaning
  .
  This tool helps users reclaim disk space and maintain system
- performance with an intuitive and user-friendly interface.
+ performance with an intuitive Qt6-based interface.
 
 Package: lz-disk-cleaner-dbg
 Architecture: any

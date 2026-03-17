@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(lz-disk-cleaner VERSION 1.0.0 LANGUAGES CXX)
+project(lz-disk-cleaner VERSION 1.1.0 LANGUAGES CXX)
 
 # C++ 标准
 set(CMAKE_CXX_STANDARD 17)
@@ -15,6 +15,8 @@ find_package(Qt6 REQUIRED COMPONENTS
     Gui
     Widgets
     Network
+    Svg
+    SvgWidgets
 )
 
 # 查找 X11 和 XCB 库（用于DDE窗口最大化还原问题）
@@ -33,6 +35,7 @@ set(SOURCES
     src/core/diskcleaner.cpp
     src/core/systeminfo.cpp
     src/core/fileshredder.cpp
+    src/core/hardwaremonitor.cpp
     src/gui/mainwindow.cpp
     src/gui/dashboardwidget.cpp
     src/gui/analyzewidget.cpp
@@ -42,6 +45,10 @@ set(SOURCES
     src/gui/progressdialog.cpp
     src/gui/fileshredderwidget.cpp
     src/gui/systemslimmerwidget.cpp
+    src/gui/temperaturewidget.cpp
+    src/gui/startupappswidget.cpp
+    src/gui/aptsourcemanagerwidget.cpp
+    src/gui/settingsdialog.cpp
     src/core/systemslimmer.cpp
     src/utils/logger.cpp
     src/utils/config.cpp
@@ -53,6 +60,7 @@ set(HEADERS
     src/core/diskcleaner.h
     src/core/systeminfo.h
     src/core/fileshredder.h
+    src/core/hardwaremonitor.h
     src/gui/mainwindow.h
     src/gui/dashboardwidget.h
     src/gui/analyzewidget.h
@@ -62,6 +70,10 @@ set(HEADERS
     src/gui/progressdialog.h
     src/gui/fileshredderwidget.h
     src/gui/systemslimmerwidget.h
+    src/gui/temperaturewidget.h
+    src/gui/startupappswidget.h
+    src/gui/aptsourcemanagerwidget.h
+    src/gui/settingsdialog.h
     src/core/systemslimmer.h
     src/utils/logger.h
     src/utils/config.h
@@ -85,6 +97,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::Network
+    Qt6::Svg
+    Qt6::SvgWidgets
 )
 
 # 链接 X11/XCB 库（用于DDE窗口状态监听）

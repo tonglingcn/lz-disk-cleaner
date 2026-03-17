@@ -18,6 +18,10 @@
 #include <QScrollArea>
 #include <QStackedWidget>
 #include <QDebug>
+#include <QMenu>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QClipboard>
 
 // ==================== FeatureCard ====================
 
@@ -435,18 +439,27 @@ void SystemSlimmerWidget::initResultPage()
     m_largeFileTable->setAlternatingRowColors(true);
     m_largeFileTable->verticalHeader()->setDefaultSectionSize(36);  // 行高
     m_largeFileTable->verticalHeader()->setVisible(false);  // 隐藏行号列
+    
+    // 添加右键菜单支持
+    m_largeFileTable->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_largeFileTable, &QTableWidget::customContextMenuRequested, this, &SystemSlimmerWidget::onLargeFileContextMenu);
+    
     m_largeFileTable->setStyleSheet(
         "QTableWidget { "
         "   border: 1px solid #E5E8E8; "
         "   border-radius: 6px; "
         "   background-color: white; "
         "   gridline-color: #ECF0F1; "
+        "   outline: none; "
         "}"
         "QTableWidget::item { padding: 4px; }"
         "QTableWidget::item:selected { "
         "   background-color: #D6EAF8; "
         "   color: #2C3E50; "
+        "   border: none; "
+        "   outline: none; "
         "}"
+        "QTableWidget::item:focus { border: none; outline: none; }"
         "QTableWidget::item:selected QCheckBox::indicator:checked { "
         "   border: 2px solid #27ae60; "
         "   background: #27ae60; "
@@ -460,6 +473,8 @@ void SystemSlimmerWidget::initResultPage()
         "   font-weight: bold; "
         "   color: #2C3E50; "
         "}"
+        "QCheckBox:focus { outline: none; }"
+        "QPushButton:focus { outline: none; }"
     );
     largeFileLayout->addWidget(m_largeFileTable);
     
@@ -537,18 +552,27 @@ void SystemSlimmerWidget::initResultPage()
     m_duplicateTable->setAlternatingRowColors(true);
     m_duplicateTable->verticalHeader()->setDefaultSectionSize(36);  // 行高
     m_duplicateTable->verticalHeader()->setVisible(false);  // 隐藏行号列
+    
+    // 添加右键菜单支持
+    m_duplicateTable->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_duplicateTable, &QTableWidget::customContextMenuRequested, this, &SystemSlimmerWidget::onDuplicateFileContextMenu);
+    
     m_duplicateTable->setStyleSheet(
         "QTableWidget { "
         "   border: 1px solid #E5E8E8; "
         "   border-radius: 6px; "
         "   background-color: white; "
         "   gridline-color: #ECF0F1; "
+        "   outline: none; "
         "}"
         "QTableWidget::item { padding: 4px; }"
         "QTableWidget::item:selected { "
         "   background-color: #D6EAF8; "
         "   color: #2C3E50; "
+        "   border: none; "
+        "   outline: none; "
         "}"
+        "QTableWidget::item:focus { border: none; outline: none; }"
         "QHeaderView::section { "
         "   background-color: #F8F9FA; "
         "   padding: 8px; "
@@ -557,6 +581,8 @@ void SystemSlimmerWidget::initResultPage()
         "   font-weight: bold; "
         "   color: #2C3E50; "
         "}"
+        "QCheckBox:focus { outline: none; }"
+        "QPushButton:focus { outline: none; }"
     );
     dupLayout->addWidget(m_duplicateTable);
     
@@ -1060,4 +1086,86 @@ QString SystemSlimmerWidget::formatFileSize(qint64 bytes)
 void SystemSlimmerWidget::applyTheme()
 {
     // 主题适配已在各控件样式中设置
+}
+
+void SystemSlimmerWidget::onLargeFileContextMenu(const QPoint &pos)
+{
+    // 获取被右键点击的行
+    QTableWidgetItem *item = m_largeFileTable->itemAt(pos);
+    if (!item) {
+        return;
+    }
+    
+    int row = item->row();
+    
+    // 获取路径（存储在第2列的 UserRole 中）
+    QTableWidgetItem *nameItem = m_largeFileTable->item(row, 2);
+    if (!nameItem) {
+        return;
+    }
+    
+    QString path = nameItem->data(Qt::UserRole).toString();
+    if (path.isEmpty()) {
+        return;
+    }
+    
+    // 创建右键菜单
+    QMenu contextMenu(this);
+    QAction *openFolderAction = contextMenu.addAction(tr("📂 打开所在文件夹"));
+    QAction *copyPathAction = contextMenu.addAction(tr("📋 复制路径"));
+    
+    // 显示菜单并获取选中的动作
+    QAction *selectedAction = contextMenu.exec(m_largeFileTable->viewport()->mapToGlobal(pos));
+    
+    if (selectedAction == openFolderAction) {
+        // 打开文件夹
+        QFileInfo fileInfo(path);
+        QString dirPath = fileInfo.dir().absolutePath();
+        
+        QDesktopServices::openUrl(QUrl::fromLocalFile(dirPath));
+    } else if (selectedAction == copyPathAction) {
+        // 复制路径到剪贴板
+        QApplication::clipboard()->setText(path);
+    }
+}
+
+void SystemSlimmerWidget::onDuplicateFileContextMenu(const QPoint &pos)
+{
+    // 获取被右键点击的行
+    QTableWidgetItem *item = m_duplicateTable->itemAt(pos);
+    if (!item) {
+        return;
+    }
+    
+    int row = item->row();
+    
+    // 获取路径（存储在第2列的 UserRole 中）
+    QTableWidgetItem *nameItem = m_duplicateTable->item(row, 2);
+    if (!nameItem) {
+        return;
+    }
+    
+    QString path = nameItem->data(Qt::UserRole).toString();
+    if (path.isEmpty()) {
+        return;
+    }
+    
+    // 创建右键菜单
+    QMenu contextMenu(this);
+    QAction *openFolderAction = contextMenu.addAction(tr("📂 打开所在文件夹"));
+    QAction *copyPathAction = contextMenu.addAction(tr("📋 复制路径"));
+    
+    // 显示菜单并获取选中的动作
+    QAction *selectedAction = contextMenu.exec(m_duplicateTable->viewport()->mapToGlobal(pos));
+    
+    if (selectedAction == openFolderAction) {
+        // 打开文件夹
+        QFileInfo fileInfo(path);
+        QString dirPath = fileInfo.dir().absolutePath();
+        
+        QDesktopServices::openUrl(QUrl::fromLocalFile(dirPath));
+    } else if (selectedAction == copyPathAction) {
+        // 复制路径到剪贴板
+        QApplication::clipboard()->setText(path);
+    }
 }

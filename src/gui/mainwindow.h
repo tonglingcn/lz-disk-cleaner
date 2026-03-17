@@ -22,8 +22,11 @@
 #include "resourceswidget.h"
 #include "fileshredderwidget.h"
 #include "systemslimmerwidget.h"
+#include "startupappswidget.h"
+#include "aptsourcemanagerwidget.h"
 #include "cleanupdialog.h"
 #include "progressdialog.h"
+#include "settingsdialog.h"
 
 class MainWindow : public QMainWindow
 {
@@ -73,6 +76,8 @@ private:
     ResourcesWidget *m_resourcesWidget;
     FileShredderWidget *m_fileShredderWidget;
     SystemSlimmerWidget *m_systemSlimmerWidget;
+    StartupAppsWidget *m_startupAppsWidget;
+    APTSourceManagerWidget *m_aptSourceManagerWidget;
     
     QPushButton *m_analyzeButton;
     QPushButton *m_smartCleanupButton;

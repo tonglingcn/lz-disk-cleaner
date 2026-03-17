@@ -119,6 +119,7 @@ private slots:
     void onCategoryScanned(ScanCategory category, const QList<ScanResult> &results);
     void onScanFinished(qint64 totalSize, int totalFiles);
     void onTreeItemChanged(QTreeWidgetItem *item, int column);
+    void onTreeContextMenu(const QPoint &pos);
 
 private:
     void initUI();
@@ -132,6 +133,8 @@ private:
     QString getCategoryName(ScanCategory category) const;
     QString getCategoryIcon(ScanCategory category) const;
     QString formatSize(qint64 bytes) const;
+    bool isDarkTheme();
+    void applyTheme();
 
     // UI 组件
     QStackedLayout *m_stackedLayout;

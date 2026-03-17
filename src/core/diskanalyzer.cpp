@@ -95,16 +95,88 @@ ImmutableSystemInfo DiskAnalyzer::analyzeImmutableSystem()
     
     ImmutableSystemInfo info;
     info.enabled = false;
+    info.totalSnapshotSize = 0;
+    info.snapshotCount = 0;
+    info.modifiedSize = 0;
+    info.ostreeRepoSize = 0;
+    info.deploySize = 0;
+    info.overlaySize = 0;
     
-    // 检查是否为磐石系统
-    m_process->start("deepin-immutable-ctl", QStringList() << "status");
+    // 检查 deepin-immutable-ctl 是否存在
+    m_process->start("which", QStringList() << "deepin-immutable-ctl");
+    m_process->waitForFinished(3000);
+    
+    if (m_process->exitCode() != 0) {
+        LOG_WARNING("deepin-immutable-ctl not found, not an immutable system");
+        return info;
+    }
+    
+    // 检查是否为磐石系统模式
+    m_process->start("deepin-immutable-ctl", QStringList() << "-s");
     m_process->waitForFinished(5000);
     
-    if (m_process->exitCode() == 0) {
-        QString output = QString::fromUtf8(m_process->readAllStandardOutput());
-        info = parseImmutableOutput(output);
-    } else {
-        LOG_WARNING("Not an immutable system or command not available");
+    QString statusOutput = QString::fromUtf8(m_process->readAllStandardOutput());
+    LOG_INFO(QString("Immutable status: %1").arg(statusOutput));
+    
+    // 只要工具存在就认为有磐石系统组件
+    info.enabled = true;
+    
+    // 获取部署信息 (需要 root 权限，可能失败)
+    m_process->start("deepin-immutable-ctl", QStringList() << "admin" << "status" << "-d" << "all");
+    if (m_process->waitForFinished(5000)) {
+        info.deploymentInfo = QString::fromUtf8(m_process->readAllStandardOutput());
+        LOG_DEBUG(QString("Deployment info: %1").arg(info.deploymentInfo.left(200)));
+    }
+    
+    // 获取修改层信息
+    m_process->start("deepin-immutable-ctl", QStringList() << "admin" << "status" << "-d" << "modified");
+    if (m_process->waitForFinished(5000)) {
+        QString modifiedOutput = QString::fromUtf8(m_process->readAllStandardOutput());
+        LOG_DEBUG(QString("Modified output: %1").arg(modifiedOutput));
+        // 解析修改层大小
+        QRegularExpression sizeRe("size[:\\s]+(\\d+)", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpressionMatch match = sizeRe.match(modifiedOutput);
+        if (match.hasMatch()) {
+            info.modifiedSize = match.captured(1).toLongLong();
+        }
+    }
+    
+    // 获取快照列表
+    m_process->start("deepin-immutable-ctl", QStringList() << "snapshot" << "list");
+    if (m_process->waitForFinished(5000)) {
+        QString snapshotOutput = QString::fromUtf8(m_process->readAllStandardOutput());
+        info.snapshots = snapshotOutput.split('\n', Qt::SkipEmptyParts);
+        info.snapshotCount = info.snapshots.size();
+        LOG_DEBUG(QString("Snapshot count: %1").arg(info.snapshotCount));
+    }
+    
+    // 计算各目录大小
+    // 1. OSTree 仓库
+    QDir ostreeRepo("/ostree/repo");
+    if (ostreeRepo.exists()) {
+        info.ostreeRepoSize = getDirectorySize("/ostree/repo");
+        LOG_INFO(QString("OSTree repo size: %1").arg(info.ostreeRepoSize));
+    }
+    
+    // 2. 部署目录
+    QDir deployDir("/ostree/deploy");
+    if (deployDir.exists()) {
+        info.deploySize = getDirectorySize("/ostree/deploy");
+        LOG_INFO(QString("Deploy size: %1").arg(info.deploySize));
+    }
+    
+    // 3. Overlay 目录
+    QDir overlayDir("/root/persistent/overlay");
+    if (overlayDir.exists()) {
+        info.overlaySize = getDirectorySize("/root/persistent/overlay");
+        LOG_INFO(QString("Overlay size: %1").arg(info.overlaySize));
+    }
+    
+    // 4. 快照目录
+    QDir snapshotDir("/boot/deepin-snapshots");
+    if (snapshotDir.exists()) {
+        info.totalSnapshotSize = getDirectorySize("/boot/deepin-snapshots");
+        LOG_INFO(QString("Snapshot size: %1").arg(info.totalSnapshotSize));
     }
     
     return info;

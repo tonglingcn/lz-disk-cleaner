@@ -1,3 +1,23 @@
+lz-disk-cleaner (1.1.0-1) unstable; urgency=medium
+
+  * New upstream release v1.1.0
+  * New features:
+    - APT source manager (add, edit, enable/disable, delete sources)
+    - Startup applications management
+    - File shredder with secure deletion
+    - Hardware monitoring (CPU, GPU, memory, disk usage)
+    - Extended browser cache support (360, Loongson, QQ, Edge browsers)
+  * Improvements:
+    - Unified selection style across all modules
+    - Refined settings dialog (removed unimplemented options)
+    - Better dark theme support for warning dialogs
+    - Fixed focus border display issues
+  * Bug fixes:
+    - Fixed warning visibility in dark theme
+    - Fixed checkbox visibility when selected
+
+ -- LZ Disk Cleaner Team <support@lz-disk-cleaner.org>  Mon, 16 Mar 2026 10:00:00 +0800
+
 lz-disk-cleaner (1.0.0-1) unstable; urgency=medium
 
   * Initial release.
@@ -12,6 +32,6 @@ lz-disk-cleaner (1.0.0-1) unstable; urgency=medium
     - Real-time resource monitoring (CPU, Memory, Network)
     - Support for stubborn file deletion with privilege elevation
     - Dark/Light theme support
-    - Chinese and English localization
+    - Chinese localization
 
  -- LZ Disk Cleaner Team <support@lz-disk-cleaner.org>  Sun, 09 Mar 2026 19:00:00 +0800

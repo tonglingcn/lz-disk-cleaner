@@ -28,6 +28,14 @@ struct ImmutableSystemInfo {
     QString modifiedLayer;
     qint64 modifiedSize;
     QStringList snapshots;
+    // 新增部署信息
+    QString deploymentInfo;
+    qint64 totalSnapshotSize;
+    int snapshotCount;
+    // 新增：各组件大小
+    qint64 ostreeRepoSize;     // /ostree/repo 大小
+    qint64 deploySize;         // /ostree/deploy 大小
+    qint64 overlaySize;        // /root/persistent/overlay 大小
 };
 
 struct LinglongAppInfo {

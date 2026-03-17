@@ -175,19 +175,42 @@ void DashboardWidget::initUI()
 bool DashboardWidget::isDarkTheme()
 {
     // 检测系统是否使用深色主题
-    // 方法1: 检查环境变量
-    QString desktopSession = qEnvironmentVariable("DESKTOP_SESSION");
-    QString deepinTheme = qEnvironmentVariable("DEEPIN_THEME");
     
-    // 方法2: 通过QPalette检测
+    // 方法1: 检查 Deepin 主题环境变量
+    QString deepinTheme = qEnvironmentVariable("DEEPIN_THEME");
+    if (deepinTheme.toLower().contains("dark")) {
+        LOG_DEBUG("Dark theme detected via DEEPIN_THEME");
+        return true;
+    }
+    
+    // 方法2: 检查 QT_QPA_PLATFORMTHEME 和通用暗色主题变量
+    QString qtPlatformTheme = qEnvironmentVariable("QT_QPA_PLATFORMTHEME");
+    QString gtkTheme = qEnvironmentVariable("GTK_THEME");
+    if (gtkTheme.toLower().contains("dark") || 
+        qEnvironmentVariable("QT_STYLE_OVERRIDE").toLower().contains("dark")) {
+        LOG_DEBUG("Dark theme detected via GTK_THEME or QT_STYLE_OVERRIDE");
+        return true;
+    }
+    
+    // 方法3: 通过 QPalette 检测（最可靠的方法）
     QPalette palette = qApp->palette();
     QColor windowColor = palette.color(QPalette::Window);
-    // 如果窗口背景较暗，认为是深色主题
-    int brightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+    QColor textColor = palette.color(QPalette::Text);
     
-    LOG_DEBUG(QString("Theme detection - brightness: %1").arg(brightness));
+    // 计算窗口背景亮度
+    int bgBrightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+    // 计算文字亮度
+    int textBrightness = (textColor.red() * 299 + textColor.green() * 587 + textColor.blue() * 114) / 1000;
     
-    return brightness < 128;
+    LOG_DEBUG(QString("Theme detection - bg brightness: %1, text brightness: %2").arg(bgBrightness).arg(textBrightness));
+    
+    // 如果背景较暗（< 100）且文字较亮（> 150），判定为深色主题
+    if (bgBrightness < 100 && textBrightness > 150) {
+        return true;
+    }
+    
+    // 兜底：仅根据背景亮度判断
+    return bgBrightness < 128;
 }
 
 void DashboardWidget::applyTheme()

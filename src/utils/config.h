@@ -27,9 +27,6 @@ public:
     bool getAutoUpdate() const;
     void setAutoUpdate(bool enabled);
     
-    bool getShowNotifications() const;
-    void setShowNotifications(bool enabled);
-    
     // 清理设置
     bool getAutoCleanCache() const;
     void setAutoCleanCache(bool enabled);
@@ -37,18 +34,44 @@ public:
     int getJournalKeepDays() const;
     void setJournalKeepDays(int days);
     
+    int getJournalMaxSizeMB() const;
+    void setJournalMaxSizeMB(int sizeMB);
+    
     int getSnapshotKeepCount() const;
     void setSnapshotKeepCount(int count);
     
     bool getConfirmBeforeCleanup() const;
     void setConfirmBeforeCleanup(bool enabled);
     
-    // 界面设置
-    bool getDarkMode() const;
-    void setDarkMode(bool enabled);
-    
     int getRefreshInterval() const;
     void setRefreshInterval(int seconds);
+    
+    // 白名单设置 - 保留空目录（清理内容但保留目录结构）
+    QStringList getKeepEmptyDirWhitelist() const;
+    void setKeepEmptyDirWhitelist(const QStringList &list);
+    void addKeepEmptyDirPath(const QString &path);
+    void removeKeepEmptyDirPath(const QString &path);
+    
+    // 白名单设置 - 完全保护（不扫描不清理）
+    QStringList getFullProtectWhitelist() const;
+    void setFullProtectWhitelist(const QStringList &list);
+    void addFullProtectPath(const QString &path);
+    void removeFullProtectPath(const QString &path);
+    
+    // 白名单设置 - 保护文件模式（按模式匹配）
+    QStringList getFilePatternWhitelist() const;
+    void setFilePatternWhitelist(const QStringList &list);
+    void addFilePattern(const QString &pattern);
+    void removeFilePattern(const QString &pattern);
+    
+    // 系统级白名单（只读，内置保护）
+    QStringList getSystemKeepEmptyDirs() const;
+    QStringList getSystemFullProtectDirs() const;
+    QStringList getSystemFilePatterns() const;
+    
+    // 导入导出配置
+    bool exportConfig(const QString &filePath);
+    bool importConfig(const QString &filePath);
     
     // 保存和加载
     void save();

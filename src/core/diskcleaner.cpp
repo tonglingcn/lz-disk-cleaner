@@ -182,6 +182,44 @@ CleanupResult DiskCleaner::cleanJournalLogs(int keepDays)
     return result;
 }
 
+CleanupResult DiskCleaner::cleanJournalLogsBySize(int maxSizeMB)
+{
+    LOG_INFO(QString("Starting journal logs cleanup by size. Max size: %1 MB").arg(maxSizeMB));
+    emit cleanupProgress("清理系统日志(按大小)", 0);
+    
+    CleanupResult result;
+    result.itemName = "系统日志(按大小)";
+    
+    if (!checkSudoAccess()) {
+        result.success = false;
+        result.errorMessage = "需要 sudo 权限";
+        return result;
+    }
+    
+    // 先获取当前日志大小
+    m_process->start("sh", QStringList() << "-c" 
+        << "journalctl --disk-usage 2>/dev/null | grep -oP '\\d+(?=\\s*bytes)' | head -1");
+    m_process->waitForFinished();
+    qint64 beforeSize = m_process->readAllStandardOutput().trimmed().toLongLong();
+    
+    // journalctl --vacuum-size=100M
+    QString command = QString("journalctl --vacuum-size=%1M").arg(maxSizeMB);
+    m_process->start("sudo", QStringList() << "bash" << "-c" << command);
+    m_process->waitForFinished();
+    
+    // 获取清理后的日志大小
+    m_process->start("sh", QStringList() << "-c" 
+        << "journalctl --disk-usage 2>/dev/null | grep -oP '\\d+(?=\\s*bytes)' | head -1");
+    m_process->waitForFinished();
+    qint64 afterSize = m_process->readAllStandardOutput().trimmed().toLongLong();
+    
+    result.success = (m_process->exitCode() == 0);
+    result.freedSpace = beforeSize > afterSize ? beforeSize - afterSize : 0;
+    
+    LOG_INFO(QString("Journal logs cleanup by size completed. Freed: %1 bytes").arg(result.freedSpace));
+    return result;
+}
+
 CleanupResult DiskCleaner::cleanTempFiles()
 {
     LOG_INFO("Starting temp files cleanup");
@@ -284,26 +322,38 @@ CleanupResult DiskCleaner::cleanSnapshots(int keepCount)
     QString output = QString::fromUtf8(m_process->readAllStandardOutput());
     QStringList snapshots = output.split('\n', Qt::SkipEmptyParts);
     
+    // 获取快照目录总大小（清理前）
+    qint64 beforeSize = 0;
+    QString snapshotDir = "/boot/deepin-snapshots";
+    QDir dir(snapshotDir);
+    if (dir.exists()) {
+        beforeSize = getDirectorySize(snapshotDir);
+    }
+    
     // 保留最新的 keepCount 个快照
     int toRemove = snapshots.size() - keepCount;
-    qint64 totalFreed = 0;
     
     for (int i = 0; i < toRemove; ++i) {
         QString snapshot = snapshots[i].trimmed();
         if (snapshot.isEmpty()) continue;
         
+        emit cleanupProgress(QString("删除快照: %1").arg(snapshot), 
+                            static_cast<int>((i * 100.0) / toRemove));
+        
         m_process->start("deepin-immutable-ctl", QStringList() << "snapshot" << "delete" << snapshot);
         m_process->waitForFinished();
-        
-        if (m_process->exitCode() == 0) {
-            // 快照大小需要额外计算
-        }
+    }
+    
+    // 获取快照目录总大小（清理后）
+    qint64 afterSize = 0;
+    if (dir.exists()) {
+        afterSize = getDirectorySize(snapshotDir);
     }
     
     result.success = true;
-    result.freedSpace = totalFreed;
+    result.freedSpace = beforeSize > afterSize ? beforeSize - afterSize : 0;
     
-    LOG_INFO("Snapshots cleanup completed");
+    LOG_INFO(QString("Snapshots cleanup completed. Freed: %1 bytes").arg(result.freedSpace));
     return result;
 }
 
@@ -354,10 +404,65 @@ CleanupResult DiskCleaner::cleanBrowserCache()
     totalFreed += getDirectorySize(firefoxCache);
     removeDirectory(firefoxCache);
     
+    // 360浏览器缓存
+    QStringList browser360Paths = {
+        home + "/.cache/com.360.browser/Default/Cache",
+        home + "/.cache/com.360.browser/Default/Code Cache",
+        home + "/.cache/com.360.browser/Default/GPUCache"
+    };
+    for (const QString &path : browser360Paths) {
+        totalFreed += getDirectorySize(path);
+        cleanDirContent(path);  // 清理内容但保留目录结构
+    }
+    
+    // 龙芯浏览器缓存
+    QStringList lbrowserPaths = {
+        home + "/.cache/cn.loongnix.lbrowser/Default/Cache",
+        home + "/.cache/cn.loongnix.lbrowser/Default/Code Cache",
+        home + "/.cache/cn.loongnix.lbrowser/Default/GPUCache"
+    };
+    for (const QString &path : lbrowserPaths) {
+        totalFreed += getDirectorySize(path);
+        cleanDirContent(path);
+    }
+    
+    // QQ浏览器缓存
+    QStringList qqbrowserPaths = {
+        home + "/.cache/qqbrowser/Default/Cache",
+        home + "/.cache/qqbrowser/Default/Code Cache",
+        home + "/.cache/qqbrowser/Default/GPUCache"
+    };
+    for (const QString &path : qqbrowserPaths) {
+        totalFreed += getDirectorySize(path);
+        cleanDirContent(path);
+    }
+    
+    // Edge浏览器缓存
+    QStringList edgePaths = {
+        home + "/.cache/microsoft-edge/Default/Cache",
+        home + "/.cache/microsoft-edge/Default/Code Cache",
+        home + "/.cache/microsoft-edge/Default/GPUCache"
+    };
+    for (const QString &path : edgePaths) {
+        totalFreed += getDirectorySize(path);
+        cleanDirContent(path);
+    }
+    
+    // Chromium浏览器缓存
+    QStringList chromiumPaths = {
+        home + "/.cache/chromium/Default/Cache",
+        home + "/.cache/chromium/Default/Code Cache",
+        home + "/.cache/chromium/Default/GPUCache"
+    };
+    for (const QString &path : chromiumPaths) {
+        totalFreed += getDirectorySize(path);
+        cleanDirContent(path);
+    }
+    
     result.success = true;
     result.freedSpace = totalFreed;
     
-    LOG_INFO("Browser cache cleanup completed");
+    LOG_INFO(QString("Browser cache cleanup completed. Freed: %1 bytes").arg(totalFreed));
     return result;
 }
 
@@ -433,6 +538,34 @@ bool DiskCleaner::removeDirectory(const QString &path)
         return dir.removeRecursively();
     }
     return true;
+}
+
+bool DiskCleaner::cleanDirContent(const QString &path)
+{
+    QDir dir(path);
+    if (!dir.exists()) {
+        return true;  // 目录不存在，无需清理
+    }
+    
+    // 清理目录内容，但保留目录本身
+    bool success = true;
+    QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot);
+    for (const QFileInfo &entry : entries) {
+        QString entryPath = entry.absoluteFilePath();
+        if (entry.isDir()) {
+            QDir subDir(entryPath);
+            if (!subDir.removeRecursively()) {
+                LOG_ERROR(QString("Failed to remove dir: %1").arg(entryPath));
+                success = false;
+            }
+        } else {
+            if (!QFile::remove(entryPath)) {
+                LOG_ERROR(QString("Failed to remove file: %1").arg(entryPath));
+                success = false;
+            }
+        }
+    }
+    return success;
 }
 
 qint64 DiskCleaner::getDirectorySize(const QString &path)

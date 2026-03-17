@@ -8,5 +8,10 @@
         <file>icons/settings.svg</file>
         <file>icons/about.svg</file>
         <file>icons/check.svg</file>
+        <!-- Hardware Temperature Icons -->
+        <file>icons/cpu.svg</file>
+        <file>icons/motherboard.svg</file>
+        <file>icons/gpu.svg</file>
+        <file>icons/hdd.svg</file>
     </qresource>
 </RCC>
