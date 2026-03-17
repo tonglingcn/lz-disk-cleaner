@@ -22,9 +22,15 @@ jobs:
           build-essential \
           cmake \
           qt6-base-dev \
+          qt6-base-dev-tools \
           qt6-tools-dev \
           libqt6charts6-dev \
           libqt6svg6-dev \
+          libgl1-mesa-dev \
+          libegl1-mesa-dev \
+          libvulkan-dev \
+          libxkbcommon-dev \
+          pkg-config \
           debhelper \
           dh-python
 

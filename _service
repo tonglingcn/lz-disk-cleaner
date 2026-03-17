@@ -1,0 +1,16 @@
+<services>
+  <service name="tar_scm">
+    <param name="url">https://github.com/tonglingcn/lz-disk-cleaner.git</param>
+    <param name="scm">git</param>
+    <param name="filename">lz-disk-cleaner</param>
+    <param name="versionprefix">1.1.0</param>
+    <param name="revision">v1.1.0</param>
+  </service>
+  <service name="recompress">
+    <param name="file">*.tar</param>
+    <param name="compression">gz</param>
+  </service>
+  <service name="set_version">
+    <param name="basename">lz-disk-cleaner</param>
+  </service>
+</services>
