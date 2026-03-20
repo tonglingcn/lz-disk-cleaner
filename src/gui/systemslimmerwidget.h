@@ -56,6 +56,9 @@ public:
     explicit SystemSlimmerWidget(QWidget *parent = nullptr);
     ~SystemSlimmerWidget();
 
+signals:
+    void historyChanged();
+
 private slots:
     void onStartScanClicked();
     void onCancelScanClicked();
@@ -80,6 +83,7 @@ private:
     QString formatFileSize(qint64 bytes);
     void updateResultPage();
     void applyTheme();
+    bool isDarkTheme();
     
     // 页面切换
     void showMainPage();

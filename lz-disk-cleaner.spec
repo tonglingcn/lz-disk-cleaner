@@ -13,13 +13,13 @@
 # published by the Open Source Initiative.
 
 Name:           lz-disk-cleaner
-Version:        1.1.0
+Version:        1.1.1
 Release:        1
 Summary:        Disk cleaning and optimization tool for Linux
 
 License:        GPL-3.0-or-later
 URL:            https://github.com/tonglingcn/lz-disk-cleaner
-Source0:        %{name}_%{version}.orig.tar.gz
+Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  cmake >= 3.16
 BuildRequires:  gcc-c++
@@ -39,6 +39,7 @@ Requires:       polkit
 Requires:       psmisc
 Requires:       lsof
 Recommends:     google-noto-color-emoji-fonts
+Recommends:     lm_sensors
 
 %description
 LZ Disk Cleaner is a comprehensive disk cleaning and system optimization
@@ -56,7 +57,7 @@ Main Features:
 - Immutable system snapshot support
 
 %prep
-%setup -q -n deepin-disk-cleaner
+%setup -q -n %{name}-%{version}
 
 %build
 mkdir -p build
@@ -87,7 +88,7 @@ install -Dm644 src/helper/com.deepin.pkexec.disk-cleaner.policy \
 %{_datadir}/polkit-1/actions/com.deepin.pkexec.disk-cleaner.policy
 
 %changelog
-* Tue Mar 17 2026 克亮 <315707022@qq.com> - 1.1.0-1
+* Wed Mar 19 2026 克亮 <315707022@qq.com> - 1.1.1-1
 - New features: hardware monitoring, APT source management, startup apps
 - Add distro-adaptive title support
 - Add dark theme support

@@ -75,6 +75,9 @@ private:
     
     // 计算图例需要的行数
     int calculateLegendRows(int legendAreaWidth) const;
+    
+    // 检测深色主题
+    bool isDarkTheme();
 
 private:
     QString m_title;

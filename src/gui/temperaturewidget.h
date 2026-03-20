@@ -34,6 +34,7 @@ private:
     void updateDisplay();
     QString getStatusText(double temp);
     QString getStatusIcon(double temp);
+    bool isDarkTheme();
 
     QString m_name;
     double m_temperature;
@@ -64,6 +65,7 @@ private:
     void initUI();
     QString getGpuIcon(bool isNvidia);
     QString getDiskIcon(bool isSSD, bool isNVMe);
+    bool isDarkTheme();
 
 private:
     TempCard *m_cpuCard;

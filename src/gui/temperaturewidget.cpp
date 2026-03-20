@@ -6,6 +6,8 @@
 #include "temperaturewidget.h"
 #include "../utils/logger.h"
 
+#include <QApplication>
+
 // ============================================================================
 // TempCard Implementation
 // ============================================================================
@@ -27,6 +29,14 @@ TempCard::TempCard(const QString &name, QWidget *parent)
 
 void TempCard::initUI()
 {
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString cardBgColor = darkMode ? "#3d3d3d" : "white";
+    QString borderColor = darkMode ? "#555555" : "#e0e0e0";
+    QString nameColor = darkMode ? "#a0a0a0" : "#666";
+    QString tempColor = darkMode ? "#e0e0e0" : "#333";
+    QString statusColor = darkMode ? "#808080" : "#999";
+
     // 主布局
     QHBoxLayout *mainLayout = new QHBoxLayout(this);
     mainLayout->setContentsMargins(15, 12, 15, 12);
@@ -38,15 +48,15 @@ void TempCard::initUI()
     leftLayout->setAlignment(Qt::AlignVCenter);
 
     m_nameLabel = new QLabel(m_name, this);
-    m_nameLabel->setStyleSheet("font-size: 14px; color: #666; background: transparent; border: none;");
+    m_nameLabel->setStyleSheet(QString("font-size: 14px; color: %1; background: transparent; border: none;").arg(nameColor));
     leftLayout->addWidget(m_nameLabel);
 
     m_tempLabel = new QLabel("--", this);
-    m_tempLabel->setStyleSheet("font-size: 36px; font-weight: bold; color: #333; background: transparent; border: none;");
+    m_tempLabel->setStyleSheet(QString("font-size: 36px; font-weight: bold; color: %1; background: transparent; border: none;").arg(tempColor));
     leftLayout->addWidget(m_tempLabel);
 
     m_statusLabel = new QLabel("检测中...", this);
-    m_statusLabel->setStyleSheet("font-size: 12px; color: #999; background: transparent; border: none;");
+    m_statusLabel->setStyleSheet(QString("font-size: 12px; color: %1; background: transparent; border: none;").arg(statusColor));
     leftLayout->addWidget(m_statusLabel);
 
     mainLayout->addLayout(leftLayout);
@@ -68,7 +78,7 @@ void TempCard::initUI()
     mainLayout->addWidget(iconContainer, 0, Qt::AlignVCenter | Qt::AlignRight);
 
     // 设置卡片样式
-    setStyleSheet("TempCard { background-color: white; border: 1px solid #e0e0e0; border-radius: 10px; }");
+    setStyleSheet(QString("TempCard { background-color: %1; border: 1px solid %2; border-radius: 10px; }").arg(cardBgColor, borderColor));
 }
 
 void TempCard::setTemperature(double temp)
@@ -202,6 +212,12 @@ TemperatureWidget::~TemperatureWidget()
 
 void TemperatureWidget::initUI()
 {
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString titleColor = darkMode ? "#e0e0e0" : "#333";
+    QString hintColor = darkMode ? "#808080" : "#999";
+    QString containerBgColor = darkMode ? "#2d2d2d" : "#f5f5f5";
+
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(15);
@@ -210,11 +226,11 @@ void TemperatureWidget::initUI()
     QHBoxLayout *titleLayout = new QHBoxLayout();
 
     QLabel *titleLabel = new QLabel("🌡️ 硬件温度监控", this);
-    titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #333;");
+    titleLabel->setStyleSheet(QString("font-size: 16px; font-weight: bold; color: %1;").arg(titleColor));
     titleLayout->addWidget(titleLabel);
 
     QLabel *hintLabel = new QLabel("实时监测", this);
-    hintLabel->setStyleSheet("font-size: 11px; color: #999;");
+    hintLabel->setStyleSheet(QString("font-size: 11px; color: %1;").arg(hintColor));
     titleLayout->addWidget(hintLabel);
     titleLayout->addStretch();
 
@@ -223,7 +239,7 @@ void TemperatureWidget::initUI()
     // 卡片容器
     QFrame *container = new QFrame(this);
     container->setFrameShape(QFrame::NoFrame);
-    container->setStyleSheet("QFrame { background-color: #f5f5f5; border-radius: 12px; }");
+    container->setStyleSheet(QString("QFrame { background-color: %1; border-radius: 12px; }").arg(containerBgColor));
 
     QHBoxLayout *cardsLayout = new QHBoxLayout(container);
     cardsLayout->setSpacing(20);
@@ -300,4 +316,20 @@ void TemperatureWidget::updateTemperatures(const HardwareTemps &temps)
     } else {
         m_diskCard->setTemperature(-1);
     }
+}
+
+bool TempCard::isDarkTheme()
+{
+    QPalette palette = qApp->palette();
+    QColor windowColor = palette.color(QPalette::Window);
+    int brightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+    return brightness < 128;
+}
+
+bool TemperatureWidget::isDarkTheme()
+{
+    QPalette palette = qApp->palette();
+    QColor windowColor = palette.color(QPalette::Window);
+    int brightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+    return brightness < 128;
 }

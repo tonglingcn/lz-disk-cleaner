@@ -1,3 +1,19 @@
+lz-disk-cleaner (1.1.1-1) unstable; urgency=medium
+
+  * New upstream release v1.1.1
+  * New features:
+    - System tray support with background running
+    - Single instance detection to prevent multiple processes
+    - Sponsor support dialog
+    - Application cache cleanup (WPS, DingTalk, Tencent Meeting, NetEase Music)
+  * Bug fixes:
+    - Fixed preview content visibility in dark theme for source manager
+  * Improvements:
+    - Changed 360 browser icon from lock to globe
+    - Optimized sponsor dialog layout
+
+ -- LZ Disk Cleaner Team <support@lz-disk-cleaner.org>  Wed, 19 Mar 2026 10:00:00 +0800
+
 lz-disk-cleaner (1.1.0-1) unstable; urgency=medium
 
   * New upstream release v1.1.0

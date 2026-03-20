@@ -15,6 +15,7 @@
 #include <QFont>
 #include <QPaintEvent>
 #include <QFontMetrics>
+#include <QApplication>
 
 HistoryChart::HistoryChart(const QString &title, int seriesCount, QWidget *parent)
     : QWidget(parent)
@@ -51,7 +52,11 @@ HistoryChart::HistoryChart(const QString &title, int seriesCount, QWidget *paren
     int minH = m_topMargin + 130 + m_bottomMargin;
     setMinimumHeight(minH);
     
-    setStyleSheet("background-color: white; border: 1px solid #bdc3c7; border-radius: 6px;");
+    // 检测深色主题并应用样式
+    bool darkMode = isDarkTheme();
+    QString bgColor = darkMode ? "#3d3d3d" : "white";
+    QString borderColor = darkMode ? "#555555" : "#bdc3c7";
+    setStyleSheet(QString("background-color: %1; border: 1px solid %2; border-radius: 6px;").arg(bgColor, borderColor));
     
     LOG_DEBUG(QString("HistoryChart created: %1, series: %2, estimatedRows: %3, minHeight: %4")
         .arg(title).arg(seriesCount).arg(estimatedRows).arg(minH));
@@ -125,18 +130,28 @@ void HistoryChart::paintEvent(QPaintEvent *event)
         }
     }
     
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QColor bgColor = darkMode ? QColor("#3d3d3d") : Qt::white;
+    QColor titleColor = darkMode ? QColor("#e0e0e0") : QColor("#2c3e50");
+    QColor gridColor = darkMode ? QColor("#555555") : QColor("#ecf0f1");
+    QColor axisLabelColor = darkMode ? QColor("#a0a0a0") : QColor("#7f8c8d");
+    QColor borderColor = darkMode ? QColor("#555555") : QColor("#bdc3c7");
+    QColor legendTextColor = darkMode ? QColor("#e0e0e0") : QColor("#2c3e50");
+    QColor dotColor = darkMode ? QColor("#3d3d3d") : Qt::white;
+    
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     
     // 绘制背景
-    painter.fillRect(rect(), Qt::white);
+    painter.fillRect(rect(), bgColor);
     
     // 绘制标题
     QFont titleFont = painter.font();
     titleFont.setBold(true);
     titleFont.setPointSize(11);
     painter.setFont(titleFont);
-    painter.setPen(QColor("#2c3e50"));
+    painter.setPen(titleColor);
     painter.drawText(QRect(10, 5, width() - 20, 25), Qt::AlignLeft | Qt::AlignVCenter, m_title);
     
     // 计算图表区域（右侧边距减小，底部留出空间给图例）
@@ -207,7 +222,13 @@ int HistoryChart::calculateLegendRows(int legendAreaWidth) const
 
 void HistoryChart::drawGrid(QPainter &painter, const QRectF &chartRect)
 {
-    painter.setPen(QPen(QColor("#ecf0f1"), 1));
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QColor gridColor = darkMode ? QColor("#555555") : QColor("#ecf0f1");
+    QColor axisLabelColor = darkMode ? QColor("#a0a0a0") : QColor("#7f8c8d");
+    QColor borderColor = darkMode ? QColor("#555555") : QColor("#bdc3c7");
+    
+    painter.setPen(QPen(gridColor, 1));
     
     // 绘制水平网格线
     int hLines = 5;
@@ -222,7 +243,7 @@ void HistoryChart::drawGrid(QPainter &painter, const QRectF &chartRect)
         QFont font = painter.font();
         font.setPointSize(9);
         painter.setFont(font);
-        painter.setPen(QColor("#7f8c8d"));
+        painter.setPen(axisLabelColor);
         painter.drawText(QRectF(5, y - 10, m_leftMargin - 10, 20), 
                         Qt::AlignRight | Qt::AlignVCenter, label);
     }
@@ -231,19 +252,19 @@ void HistoryChart::drawGrid(QPainter &painter, const QRectF &chartRect)
     int vLines = 6;
     for (int i = 0; i <= vLines; ++i) {
         double x = chartRect.left() + (chartRect.width() * i / vLines);
-        painter.setPen(QPen(QColor("#ecf0f1"), 1));
+        painter.setPen(QPen(gridColor, 1));
         painter.drawLine(QPointF(x, chartRect.top()), QPointF(x, chartRect.bottom()));
     }
     
     // 绘制边框
-    painter.setPen(QPen(QColor("#bdc3c7"), 1));
+    painter.setPen(QPen(borderColor, 1));
     painter.drawRect(chartRect);
     
     // X轴标签
     QFont font = painter.font();
     font.setPointSize(9);
     painter.setFont(font);
-    painter.setPen(QColor("#7f8c8d"));
+    painter.setPen(axisLabelColor);
     painter.drawText(QRectF(chartRect.left(), chartRect.bottom() + 5, 
                            chartRect.width(), 15), 
                     Qt::AlignCenter, tr("时间 (秒)"));
@@ -251,6 +272,10 @@ void HistoryChart::drawGrid(QPainter &painter, const QRectF &chartRect)
 
 QVector<QPointF> HistoryChart::drawSeries(QPainter &painter, const QRectF &chartRect)
 {
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QColor dotColor = darkMode ? QColor("#3d3d3d") : Qt::white;
+    
     QVector<QPointF> endPoints;
     
     for (const DataSeries &series : m_seriesList) {
@@ -303,7 +328,7 @@ QVector<QPointF> HistoryChart::drawSeries(QPainter &painter, const QRectF &chart
         
         // 在曲线末端绘制小圆点
         painter.setBrush(series.color);
-        painter.setPen(QPen(Qt::white, 1));
+        painter.setPen(QPen(dotColor, 1));
         painter.drawEllipse(endPoints.last(), 4, 4);
     }
     
@@ -313,6 +338,10 @@ QVector<QPointF> HistoryChart::drawSeries(QPainter &painter, const QRectF &chart
 void HistoryChart::drawLegend(QPainter &painter, const QRectF &chartRect, const QVector<QPointF> &endPoints)
 {
     if (m_seriesList.isEmpty()) return;
+    
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QColor legendTextColor = darkMode ? QColor("#e0e0e0") : QColor("#2c3e50");
     
     QFont font = painter.font();
     font.setPointSize(9);
@@ -443,7 +472,7 @@ void HistoryChart::drawLegend(QPainter &painter, const QRectF &chartRect, const 
             painter.fillRect(currentX, itemY + 2, colorBoxSize, colorBoxSize, series.color);
             
             // 绘制名称（不截断）
-            painter.setPen(QColor("#2c3e50"));
+            painter.setPen(legendTextColor);
             QString displayText = series.name;
             if (displayText.isEmpty()) {
                 displayText = QString("%1").arg(series.currentValue, 0, 'f', 1);
@@ -455,4 +484,12 @@ void HistoryChart::drawLegend(QPainter &painter, const QRectF &chartRect, const 
             itemIndex++;
         }
     }
+}
+
+bool HistoryChart::isDarkTheme()
+{
+    QPalette palette = qApp->palette();
+    QColor windowColor = palette.color(QPalette::Window);
+    int brightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+    return brightness < 128;
 }

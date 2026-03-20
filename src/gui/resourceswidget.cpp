@@ -22,6 +22,7 @@
 #include <QTableWidget>
 #include <QHeaderView>
 #include <QRandomGenerator>
+#include <QApplication>
 
 ResourcesWidget::ResourcesWidget(QWidget *parent)
     : QWidget(parent)
@@ -101,13 +102,22 @@ void ResourcesWidget::initUI()
     mainLayout->setContentsMargins(10, 10, 10, 10);
     mainLayout->setSpacing(15);
 
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString titleColor = darkMode ? "#e0e0e0" : "#2c3e50";
+    QString cardBgColor = darkMode ? "#3d3d3d" : "white";
+    QString borderColor = darkMode ? "#555555" : "#bdc3c7";
+    QString headerBgColor = darkMode ? "#4a4a4a" : "#f5f5f5";
+    QString headerTextColor = darkMode ? "#e0e0e0" : "#333333";
+    QString itemBorderColor = darkMode ? "#3a3a3a" : "#e0e0e0";
+
     // 标题
     QLabel *titleLabel = new QLabel(tr("📊 系统资源监控"), this);
     titleLabel->setStyleSheet(
-        "font-size: 20px;"
+        QString("font-size: 20px;"
         "font-weight: bold;"
-        "color: #2c3e50;"
-        "padding: 5px;"
+        "color: %1;"
+        "padding: 5px;").arg(titleColor)
     );
     mainLayout->addWidget(titleLabel);
 
@@ -143,17 +153,17 @@ void ResourcesWidget::initUI()
     // 磁盘信息表格区域
     QFrame *diskInfoFrame = new QFrame(this);
     diskInfoFrame->setStyleSheet(
-        "QFrame {"
-        "   background-color: white;"
-        "   border: 1px solid #bdc3c7;"
+        QString("QFrame {"
+        "   background-color: %1;"
+        "   border: 1px solid %2;"
         "   border-radius: 6px;"
         "   padding: 10px;"
-        "}"
+        "}").arg(cardBgColor, borderColor)
     );
     QVBoxLayout *diskInfoLayout = new QVBoxLayout(diskInfoFrame);
 
     QLabel *diskInfoTitle = new QLabel(tr("💾 磁盘空间信息"), diskInfoFrame);
-    diskInfoTitle->setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;");
+    diskInfoTitle->setStyleSheet(QString("font-size: 14px; font-weight: bold; color: %1;").arg(titleColor));
     diskInfoLayout->addWidget(diskInfoTitle);
 
     // 创建磁盘信息表格
@@ -184,30 +194,31 @@ void ResourcesWidget::initUI()
 
     // 样式表 - 只显示横线，隐藏竖线
     m_diskInfoTable->setStyleSheet(
-        "QTableWidget {"
-        "   background-color: white;"
-        "   border: 1px solid #ddd;"
+        QString("QTableWidget {"
+        "   background-color: %1;"
+        "   border: 1px solid %2;"
         "   border-radius: 4px;"
         "   font-size: 12px;"
+        "   color: %3;"
         "}"
         "QTableWidget::item {"
         "   padding: 8px 10px;"
         "   border: none;"
-        "   border-bottom: 1px solid #e0e0e0;"  // 只保留底部横线
+        "   border-bottom: 1px solid %4;"
         "}"
         "QTableWidget::item:last {"
-        "   border-bottom: 1px solid #e0e0e0;"
+        "   border-bottom: 1px solid %4;"
         "}"
         "QHeaderView::section {"
-        "   background-color: #f5f5f5;"
-        "   color: #333333;"
+        "   background-color: %5;"
+        "   color: %6;"
         "   padding: 8px 10px;"
         "   border: none;"
-        "   border-bottom: 3px solid #3498db;"  // 只保留底部横线（加粗蓝色）
+        "   border-bottom: 3px solid #3498db;"
         "   font-weight: bold;"
         "   font-size: 13px;"
         "   height: 42px;"
-        "}"
+        "}").arg(cardBgColor, borderColor, titleColor, itemBorderColor, headerBgColor, headerTextColor)
     );
 
     m_diskInfoTable->setMinimumHeight(280);
@@ -218,17 +229,17 @@ void ResourcesWidget::initUI()
     // 硬盘结构区域
     QFrame *diskStructFrame = new QFrame(this);
     diskStructFrame->setStyleSheet(
-        "QFrame {"
-        "   background-color: white;"
-        "   border: 1px solid #bdc3c7;"
+        QString("QFrame {"
+        "   background-color: %1;"
+        "   border: 1px solid %2;"
         "   border-radius: 6px;"
         "   padding: 10px;"
-        "}"
+        "}").arg(cardBgColor, borderColor)
     );
     QVBoxLayout *diskStructLayout = new QVBoxLayout(diskStructFrame);
 
     QLabel *diskStructTitle = new QLabel(tr("🖥️ 硬盘结构"), diskStructFrame);
-    diskStructTitle->setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;");
+    diskStructTitle->setStyleSheet(QString("font-size: 14px; font-weight: bold; color: %1;").arg(titleColor));
     diskStructLayout->addWidget(diskStructTitle);
 
     // 创建硬盘结构表格
@@ -257,30 +268,31 @@ void ResourcesWidget::initUI()
     structHeader->setDefaultSectionSize(100);
 
     m_diskStructureTable->setStyleSheet(
-        "QTableWidget {"
-        "   background-color: white;"
-        "   border: 1px solid #ddd;"
+        QString("QTableWidget {"
+        "   background-color: %1;"
+        "   border: 1px solid %2;"
         "   border-radius: 4px;"
         "   font-size: 12px;"
+        "   color: %3;"
         "}"
         "QTableWidget::item {"
         "   padding: 8px 10px;"
         "   border: none;"
-        "   border-bottom: 1px solid #e0e0e0;"  // 只保留底部横线
+        "   border-bottom: 1px solid %4;"
         "}"
         "QTableWidget::item:last {"
-        "   border-bottom: 1px solid #e0e0e0;"
+        "   border-bottom: 1px solid %4;"
         "}"
         "QHeaderView::section {"
-        "   background-color: #f5f5f5;"
-        "   color: #333333;"
+        "   background-color: %5;"
+        "   color: %6;"
         "   padding: 8px 10px;"
         "   border: none;"
-        "   border-bottom: 3px solid #27ae60;"  // 只保留底部横线（绿色加粗）
+        "   border-bottom: 3px solid #27ae60;"
         "   font-weight: bold;"
         "   font-size: 13px;"
         "   height: 42px;"
-        "}"
+        "}").arg(cardBgColor, borderColor, titleColor, itemBorderColor, headerBgColor, headerTextColor)
     );
 
     m_diskStructureTable->setMinimumHeight(300);
@@ -973,6 +985,14 @@ void ResourcesWidget::updateTemperatures()
     HardwareMonitor *monitor = HardwareMonitor::instance();
     HardwareTemps temps = monitor->getAllTemperatures();
     m_temperatureWidget->updateTemperatures(temps);
+}
+
+bool ResourcesWidget::isDarkTheme()
+{
+    QPalette palette = qApp->palette();
+    QColor windowColor = palette.color(QPalette::Window);
+    int brightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+    return brightness < 128;
 }
 
 

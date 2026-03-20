@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(lz-disk-cleaner VERSION 1.1.0 LANGUAGES CXX)
+project(lz-disk-cleaner VERSION 1.1.1 LANGUAGES CXX)
 
 # C++ 标准
 set(CMAKE_CXX_STANDARD 17)
@@ -48,7 +48,9 @@ set(SOURCES
     src/gui/temperaturewidget.cpp
     src/gui/startupappswidget.cpp
     src/gui/aptsourcemanagerwidget.cpp
+    src/gui/cleanuphistorywidget.cpp
     src/gui/settingsdialog.cpp
+    src/gui/sponsordialog.cpp
     src/core/systemslimmer.cpp
     src/utils/logger.cpp
     src/utils/config.cpp
@@ -73,7 +75,9 @@ set(HEADERS
     src/gui/temperaturewidget.h
     src/gui/startupappswidget.h
     src/gui/aptsourcemanagerwidget.h
+    src/gui/cleanuphistorywidget.h
     src/gui/settingsdialog.h
+    src/gui/sponsordialog.h
     src/core/systemslimmer.h
     src/utils/logger.h
     src/utils/config.h

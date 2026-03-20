@@ -504,6 +504,59 @@ CleanupResult DiskCleaner::cleanDevCache()
     return result;
 }
 
+CleanupResult DiskCleaner::cleanAppCache()
+{
+    LOG_INFO("Starting app cache cleanup");
+    emit cleanupProgress("清理应用缓存", 0);
+    
+    CleanupResult result;
+    result.itemName = "应用缓存";
+    
+    qint64 totalFreed = 0;
+    QString home = QDir::homePath();
+    
+    // WPS Office缓存 - 清理后首次打开会重新初始化配置
+    QStringList wpsPaths = {
+        home + "/.local/share/Kingsoft",
+        home + "/.config/Kingsoft"
+    };
+    for (const QString &path : wpsPaths) {
+        totalFreed += getDirectorySize(path);
+        removeDirectory(path);
+    }
+    
+    // 钉钉缓存
+    QStringList dingtalkPaths = {
+        home + "/.config/DingTalk",
+        home + "/.cache/DingTalk"
+    };
+    for (const QString &path : dingtalkPaths) {
+        totalFreed += getDirectorySize(path);
+        cleanDirContent(path);
+    }
+    
+    // 腾讯会议缓存
+    QStringList wemeetPaths = {
+        home + "/.config/wemeetapp",
+        home + "/.cache/wemeetapp"
+    };
+    for (const QString &path : wemeetPaths) {
+        totalFreed += getDirectorySize(path);
+        cleanDirContent(path);
+    }
+    
+    // 网易云音乐缓存
+    QString neteaseCache = home + "/.cache/netease-cloud-music";
+    totalFreed += getDirectorySize(neteaseCache);
+    cleanDirContent(neteaseCache);
+    
+    result.success = true;
+    result.freedSpace = totalFreed;
+    
+    LOG_INFO(QString("App cache cleanup completed. Freed: %1 bytes").arg(totalFreed));
+    return result;
+}
+
 QList<CleanupResult> DiskCleaner::smartCleanup()
 {
     LOG_INFO("Starting smart cleanup");
@@ -514,6 +567,8 @@ QList<CleanupResult> DiskCleaner::smartCleanup()
     results.append(cleanThumbnailCache());
     // 开发工具缓存 - pip/npm/go/cargo缓存，可重新下载
     results.append(cleanDevCache());
+    // 应用缓存 - WPS/钉钉等应用缓存
+    results.append(cleanAppCache());
     // 回收站 - 清空用户已删除的文件
     results.append(cleanTrash());
     // 注意：APT缓存和系统日志需要sudo权限，不在智能清理中执行

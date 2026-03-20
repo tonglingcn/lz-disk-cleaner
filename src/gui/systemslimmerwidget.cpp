@@ -4,12 +4,14 @@
  */
 
 #include "systemslimmerwidget.h"
+#include "cleanuphistorywidget.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QApplication>
 #include <QPalette>
 #include <QMouseEvent>
@@ -37,6 +39,18 @@ FeatureCard::FeatureCard(const QString &icon, const QString &title,
     layout->setAlignment(Qt::AlignCenter);
     layout->setSpacing(12);
     layout->setContentsMargins(20, 18, 20, 18);
+    
+    // 检测深色主题
+    bool darkMode = false;
+    if (qApp) {
+        QPalette palette = qApp->palette();
+        QColor windowColor = palette.color(QPalette::Window);
+        int brightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+        darkMode = brightness < 128;
+    }
+    
+    QString titleColor = darkMode ? "#e0e0e0" : "#2C3E50";
+    QString descColor = darkMode ? "#a0a0a0" : "#7F8C8D";
     
     // 顶部勾选标记区域
     QHBoxLayout *topLayout = new QHBoxLayout();
@@ -67,10 +81,10 @@ FeatureCard::FeatureCard(const QString &icon, const QString &title,
     // 标题
     m_titleLabel = new QLabel(title, this);
     m_titleLabel->setStyleSheet(
-        "font-size: 16px; "
+        QString("font-size: 16px; "
         "font-weight: bold; "
-        "color: #2C3E50; "
-        "background: transparent;"
+        "color: %1; "
+        "background: transparent;").arg(titleColor)
     );
     m_titleLabel->setAlignment(Qt::AlignCenter);
     m_titleLabel->setMinimumHeight(24);
@@ -79,9 +93,9 @@ FeatureCard::FeatureCard(const QString &icon, const QString &title,
     // 描述
     QLabel *descLabel = new QLabel(desc, this);
     descLabel->setStyleSheet(
-        "font-size: 12px; "
-        "color: #7F8C8D; "
-        "background: transparent;"
+        QString("font-size: 12px; "
+        "color: %1; "
+        "background: transparent;").arg(descColor)
     );
     descLabel->setAlignment(Qt::AlignCenter);
     descLabel->setWordWrap(true);
@@ -130,25 +144,41 @@ void FeatureCard::updateStyle()
     // 使用固定的尺寸策略，防止选中时压缩
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     
+    // 检测深色主题
+    bool darkMode = false;
+    if (qApp) {
+        QPalette palette = qApp->palette();
+        QColor windowColor = palette.color(QPalette::Window);
+        int brightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+        darkMode = brightness < 128;
+    }
+    
+    QString normalBg = darkMode ? "#3d3d3d" : "white";
+    QString normalBorder = darkMode ? "#555555" : "#E0E0E0";
+    QString hoverBg = darkMode ? "#4a4a4a" : "#F5F7FA";
+    QString hoverBorder = darkMode ? "#666666" : "#BDC3C7";
+    QString checkedBg = darkMode ? "#2d4a6d" : "#E8F4FD";
+    QString checkedBorder = "#3498DB";
+    
     if (m_checked) {
         setStyleSheet(
-            "FeatureCard { "
-            "   background-color: #E8F4FD; "
-            "   border: 2px solid #3498DB; "
+            QString("FeatureCard { "
+            "   background-color: %1; "
+            "   border: 2px solid %2; "
             "   border-radius: 12px; "
-            "}"
+            "}").arg(checkedBg, checkedBorder)
         );
     } else {
         setStyleSheet(
-            "FeatureCard { "
-            "   background-color: white; "
-            "   border: 2px solid #E0E0E0; "
+            QString("FeatureCard { "
+            "   background-color: %1; "
+            "   border: 2px solid %2; "
             "   border-radius: 12px; "
             "}"
             "FeatureCard:hover { "
-            "   background-color: #F5F7FA; "
-            "   border-color: #BDC3C7; "
-            "}"
+            "   background-color: %3; "
+            "   border-color: %4; "
+            "}").arg(normalBg, normalBorder, hoverBg, hoverBorder)
         );
     }
 }
@@ -197,6 +227,15 @@ void SystemSlimmerWidget::initMainPage()
 {
     m_mainPage = new QWidget(this);
     
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString hintColor = darkMode ? "#c0c0c0" : "#5D6D7E";
+    QString startBtnBg = "#3498DB";
+    QString startBtnHoverBg = "#2980B9";
+    QString startBtnPressedBg = "#21618C";
+    QString startBtnDisabledBg = darkMode ? "#4a4a4a" : "#DCDEE0";
+    QString startBtnDisabledColor = darkMode ? "#808080" : "#8C9196";
+    
     QVBoxLayout *layout = new QVBoxLayout(m_mainPage);
     layout->setSpacing(18);
     layout->setContentsMargins(30, 25, 30, 25);
@@ -225,7 +264,7 @@ void SystemSlimmerWidget::initMainPage()
     
     // ========== 功能选择区域 ==========
     QLabel *selectHint = new QLabel(tr("请选择扫描类型（单选）:"), m_mainPage);
-    selectHint->setStyleSheet("font-size: 13px; color: #5D6D7E; font-weight: bold;");
+    selectHint->setStyleSheet(QString("font-size: 13px; color: %1; font-weight: bold;").arg(hintColor));
     layout->addWidget(selectHint);
     
     // 卡片容器 - 使用固定宽度容器居中
@@ -264,17 +303,18 @@ void SystemSlimmerWidget::initMainPage()
     m_startScanBtn->setEnabled(false);
     m_startScanBtn->setCursor(Qt::PointingHandCursor);
     m_startScanBtn->setStyleSheet(
-        "QPushButton { "
-        "   background-color: #3498DB; "
+        QString("QPushButton { "
+        "   background-color: %1; "
         "   color: white; "
         "   border: none; "
         "   border-radius: 8px; "
         "   font-size: 15px; "
         "   font-weight: bold; "
         "}"
-        "QPushButton:hover { background-color: #2980B9; }"
-        "QPushButton:pressed { background-color: #21618C; }"
-        "QPushButton:disabled { background-color: #DCDEE0; color: #8C9196; }"
+        "QPushButton:hover { background-color: %2; }"
+        "QPushButton:pressed { background-color: %3; }"
+        "QPushButton:disabled { background-color: %4; color: %5; }")
+        .arg(startBtnBg, startBtnHoverBg, startBtnPressedBg, startBtnDisabledBg, startBtnDisabledColor)
     );
     btnLayout->addWidget(m_startScanBtn);
     btnLayout->addStretch();
@@ -285,6 +325,17 @@ void SystemSlimmerWidget::initMainPage()
 void SystemSlimmerWidget::initScanningPage()
 {
     m_scanningPage = new QWidget(this);
+    
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString scanningLabelColor = darkMode ? "#e0e0e0" : "#2C3E50";
+    QString pathLabelColor = darkMode ? "#a0a0a0" : "#95A5A6";
+    QString statsLabelColor = darkMode ? "#a0a0a0" : "#7F8C8D";
+    QString progressBg = darkMode ? "#3d3d3d" : "#ECF0F1";
+    QString cancelBtnBg = darkMode ? "#4a4a4a" : "#E5E8E8";
+    QString cancelBtnColor = darkMode ? "#e0e0e0" : "#5D6D7E";
+    QString cancelBtnHoverBg = darkMode ? "#5a5a5a" : "#D5DBDB";
+    
     QVBoxLayout *layout = new QVBoxLayout(m_scanningPage);
     layout->setAlignment(Qt::AlignCenter);
     layout->setSpacing(20);
@@ -298,7 +349,7 @@ void SystemSlimmerWidget::initScanningPage()
     
     // 扫描状态文字
     m_scanningLabel = new QLabel(tr("正在扫描磁盘中..."), m_scanningPage);
-    m_scanningLabel->setStyleSheet("font-size: 18px; font-weight: bold; color: #2C3E50;");
+    m_scanningLabel->setStyleSheet(QString("font-size: 18px; font-weight: bold; color: %1;").arg(scanningLabelColor));
     m_scanningLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_scanningLabel);
     
@@ -312,30 +363,30 @@ void SystemSlimmerWidget::initScanningPage()
     m_progressBar->setFormat("%p%");
     m_progressBar->setFixedHeight(24);
     m_progressBar->setStyleSheet(
-        "QProgressBar { "
+        QString("QProgressBar { "
         "   border: none; "
         "   border-radius: 12px; "
-        "   background-color: #ECF0F1; "
+        "   background-color: %1; "
         "   text-align: center; "
         "   font-size: 12px; "
         "}"
         "QProgressBar::chunk { "
         "   background-color: #3498DB; "
         "   border-radius: 12px; "
-        "}"
+        "}").arg(progressBg)
     );
     layout->addWidget(m_progressBar);
     
     // 当前扫描路径
     m_currentPathLabel = new QLabel("", m_scanningPage);
-    m_currentPathLabel->setStyleSheet("font-size: 11px; color: #95A5A6;");
+    m_currentPathLabel->setStyleSheet(QString("font-size: 11px; color: %1;").arg(pathLabelColor));
     m_currentPathLabel->setAlignment(Qt::AlignCenter);
     m_currentPathLabel->setWordWrap(true);
     layout->addWidget(m_currentPathLabel);
     
     // 统计信息
     m_statsLabel = new QLabel(tr("已扫描: 0 个文件 | 0 个目录"), m_scanningPage);
-    m_statsLabel->setStyleSheet("font-size: 12px; color: #7F8C8D;");
+    m_statsLabel->setStyleSheet(QString("font-size: 12px; color: %1;").arg(statsLabelColor));
     m_statsLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_statsLabel);
     
@@ -346,14 +397,15 @@ void SystemSlimmerWidget::initScanningPage()
     m_cancelScanBtn->setFixedSize(120, 36);
     m_cancelScanBtn->setCursor(Qt::PointingHandCursor);
     m_cancelScanBtn->setStyleSheet(
-        "QPushButton { "
-        "   background-color: #E5E8E8; "
-        "   color: #5D6D7E; "
+        QString("QPushButton { "
+        "   background-color: %1; "
+        "   color: %2; "
         "   border: none; "
         "   border-radius: 6px; "
         "   font-size: 13px; "
         "}"
-        "QPushButton:hover { background-color: #D5DBDB; }"
+        "QPushButton:hover { background-color: %3; }")
+        .arg(cancelBtnBg, cancelBtnColor, cancelBtnHoverBg)
     );
     layout->addWidget(m_cancelScanBtn, 0, Qt::AlignCenter);
     
@@ -363,6 +415,22 @@ void SystemSlimmerWidget::initScanningPage()
 void SystemSlimmerWidget::initResultPage()
 {
     m_resultPage = new QWidget(this);
+    
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString titleColor = darkMode ? "#e0e0e0" : "#2C3E50";
+    QString countLabelColor = darkMode ? "#c0c0c0" : "#5D6D7E";
+    QString tableBg = darkMode ? "#2d2d2d" : "white";
+    QString tableBorder = darkMode ? "#555555" : "#E5E8E8";
+    QString tableGrid = darkMode ? "#3d3d3d" : "#ECF0F1";
+    QString tableSelectedBg = darkMode ? "#3d5a7d" : "#D6EAF8";
+    QString tableSelectedColor = darkMode ? "#e0e0e0" : "#2C3E50";
+    QString headerBg = darkMode ? "#3d3d3d" : "#F8F9FA";
+    QString headerBorder = darkMode ? "#555555" : "#E5E8E8";
+    QString headerColor = darkMode ? "#e0e0e0" : "#2C3E50";
+    QString checkBoxUncheckedBorder = darkMode ? "#666666" : "#95a5a6";
+    QString checkBoxUncheckedBg = darkMode ? "#3d3d3d" : "white";
+    
     QVBoxLayout *mainLayout = new QVBoxLayout(m_resultPage);
     mainLayout->setSpacing(15);
     mainLayout->setContentsMargins(20, 20, 20, 20);
@@ -371,7 +439,7 @@ void SystemSlimmerWidget::initResultPage()
     QHBoxLayout *headerLayout = new QHBoxLayout();
     
     QLabel *resultTitle = new QLabel(tr("扫描结果"), m_resultPage);
-    resultTitle->setStyleSheet("font-size: 20px; font-weight: bold; color: #2C3E50;");
+    resultTitle->setStyleSheet(QString("font-size: 20px; font-weight: bold; color: %1;").arg(titleColor));
     headerLayout->addWidget(resultTitle);
     
     headerLayout->addStretch();
@@ -421,7 +489,7 @@ void SystemSlimmerWidget::initResultPage()
     
     // 统计标签
     m_largeFileCountLabel = new QLabel(tr("找到 0 个大文件"), m_largeFileResultPage);
-    m_largeFileCountLabel->setStyleSheet("font-size: 13px; color: #5D6D7E;");
+    m_largeFileCountLabel->setStyleSheet(QString("font-size: 13px; color: %1;").arg(countLabelColor));
     largeFileLayout->addWidget(m_largeFileCountLabel);
     
     // 大文件表格
@@ -445,17 +513,17 @@ void SystemSlimmerWidget::initResultPage()
     connect(m_largeFileTable, &QTableWidget::customContextMenuRequested, this, &SystemSlimmerWidget::onLargeFileContextMenu);
     
     m_largeFileTable->setStyleSheet(
-        "QTableWidget { "
-        "   border: 1px solid #E5E8E8; "
+        QString("QTableWidget { "
+        "   border: 1px solid %1; "
         "   border-radius: 6px; "
-        "   background-color: white; "
-        "   gridline-color: #ECF0F1; "
+        "   background-color: %2; "
+        "   gridline-color: %3; "
         "   outline: none; "
         "}"
-        "QTableWidget::item { padding: 4px; }"
+        "QTableWidget::item { padding: 4px; color: %4; }"
         "QTableWidget::item:selected { "
-        "   background-color: #D6EAF8; "
-        "   color: #2C3E50; "
+        "   background-color: %5; "
+        "   color: %6; "
         "   border: none; "
         "   outline: none; "
         "}"
@@ -466,15 +534,16 @@ void SystemSlimmerWidget::initResultPage()
         "   border-radius: 3px; "
         "}"
         "QHeaderView::section { "
-        "   background-color: #F8F9FA; "
+        "   background-color: %7; "
         "   padding: 8px; "
         "   border: none; "
-        "   border-bottom: 2px solid #E5E8E8; "
+        "   border-bottom: 2px solid %8; "
         "   font-weight: bold; "
-        "   color: #2C3E50; "
+        "   color: %9; "
         "}"
         "QCheckBox:focus { outline: none; }"
-        "QPushButton:focus { outline: none; }"
+        "QPushButton:focus { outline: none; }")
+        .arg(tableBorder, tableBg, tableGrid, titleColor, tableSelectedBg, tableSelectedColor, headerBg, headerBorder, headerColor)
     );
     largeFileLayout->addWidget(m_largeFileTable);
     
@@ -523,7 +592,7 @@ void SystemSlimmerWidget::initResultPage()
     // 统计信息
     QHBoxLayout *dupStatsLayout = new QHBoxLayout();
     m_duplicateCountLabel = new QLabel(tr("找到 0 组重复文件"), m_duplicateResultPage);
-    m_duplicateCountLabel->setStyleSheet("font-size: 13px; color: #5D6D7E;");
+    m_duplicateCountLabel->setStyleSheet(QString("font-size: 13px; color: %1;").arg(countLabelColor));
     dupStatsLayout->addWidget(m_duplicateCountLabel);
     
     dupStatsLayout->addStretch();
@@ -558,31 +627,32 @@ void SystemSlimmerWidget::initResultPage()
     connect(m_duplicateTable, &QTableWidget::customContextMenuRequested, this, &SystemSlimmerWidget::onDuplicateFileContextMenu);
     
     m_duplicateTable->setStyleSheet(
-        "QTableWidget { "
-        "   border: 1px solid #E5E8E8; "
+        QString("QTableWidget { "
+        "   border: 1px solid %1; "
         "   border-radius: 6px; "
-        "   background-color: white; "
-        "   gridline-color: #ECF0F1; "
+        "   background-color: %2; "
+        "   gridline-color: %3; "
         "   outline: none; "
         "}"
-        "QTableWidget::item { padding: 4px; }"
+        "QTableWidget::item { padding: 4px; color: %4; }"
         "QTableWidget::item:selected { "
-        "   background-color: #D6EAF8; "
-        "   color: #2C3E50; "
+        "   background-color: %5; "
+        "   color: %6; "
         "   border: none; "
         "   outline: none; "
         "}"
         "QTableWidget::item:focus { border: none; outline: none; }"
         "QHeaderView::section { "
-        "   background-color: #F8F9FA; "
+        "   background-color: %7; "
         "   padding: 8px; "
         "   border: none; "
-        "   border-bottom: 2px solid #E5E8E8; "
+        "   border-bottom: 2px solid %8; "
         "   font-weight: bold; "
-        "   color: #2C3E50; "
+        "   color: %9; "
         "}"
         "QCheckBox:focus { outline: none; }"
-        "QPushButton:focus { outline: none; }"
+        "QPushButton:focus { outline: none; }")
+        .arg(tableBorder, tableBg, tableGrid, titleColor, tableSelectedBg, tableSelectedColor, headerBg, headerBorder, headerColor)
     );
     dupLayout->addWidget(m_duplicateTable);
     
@@ -770,14 +840,16 @@ void SystemSlimmerWidget::updateResultPage()
             // 复选框（默认不选中）
             QCheckBox *checkBox = new QCheckBox();
             checkBox->setChecked(false);
+            QString checkBoxUncheckedBorder = isDarkTheme() ? "#666666" : "#95a5a6";
+            QString checkBoxUncheckedBg = isDarkTheme() ? "#3d3d3d" : "white";
             checkBox->setStyleSheet(
-                "QCheckBox::indicator {"
+                QString("QCheckBox::indicator {"
                 "   width: 16px;"
                 "   height: 16px;"
                 "}"
                 "QCheckBox::indicator:unchecked {"
-                "   border: 2px solid #95a5a6;"
-                "   background: white;"
+                "   border: 2px solid %1;"
+                "   background: %2;"
                 "   border-radius: 3px;"
                 "}"
                 "QCheckBox::indicator:checked {"
@@ -785,7 +857,7 @@ void SystemSlimmerWidget::updateResultPage()
                 "   background: #3498db;"
                 "   border-radius: 3px;"
                 "   image: url(:/icons/check.svg);"
-                "}"
+                "}").arg(checkBoxUncheckedBorder, checkBoxUncheckedBg)
             );
             QWidget *checkWidget = new QWidget();
             QHBoxLayout *checkLayout = new QHBoxLayout(checkWidget);
@@ -853,14 +925,16 @@ void SystemSlimmerWidget::updateResultPage()
                 // 复选框（默认不选中，但每组第一个不勾选用于保留）
                 QCheckBox *checkBox = new QCheckBox();
                 checkBox->setChecked(j > 0);  // 每组第一个不选（保留），其余选中
+                QString dupCheckBoxUncheckedBorder = isDarkTheme() ? "#666666" : "#95a5a6";
+                QString dupCheckBoxUncheckedBg = isDarkTheme() ? "#3d3d3d" : "white";
                 checkBox->setStyleSheet(
-                    "QCheckBox::indicator {"
+                    QString("QCheckBox::indicator {"
                     "   width: 16px;"
                     "   height: 16px;"
                     "}"
                     "QCheckBox::indicator:unchecked {"
-                    "   border: 2px solid #95a5a6;"
-                    "   background: white;"
+                    "   border: 2px solid %1;"
+                    "   background: %2;"
                     "   border-radius: 3px;"
                     "}"
                     "QCheckBox::indicator:checked {"
@@ -868,7 +942,7 @@ void SystemSlimmerWidget::updateResultPage()
                     "   background: #3498db;"
                     "   border-radius: 3px;"
                     "   image: url(:/icons/check.svg);"
-                    "}"
+                    "}").arg(dupCheckBoxUncheckedBorder, dupCheckBoxUncheckedBg)
                 );
                 QWidget *checkWidget = new QWidget();
                 QHBoxLayout *checkLayout = new QHBoxLayout(checkWidget);
@@ -951,7 +1025,9 @@ void SystemSlimmerWidget::onDeleteSelected()
     
     // 执行删除
     int deleted = 0;
+    qint64 totalFreed = 0;
     QStringList failedFiles;
+    QStringList deletedFiles;
     
     if (m_resultStack->currentWidget() == m_largeFileResultPage) {
         for (int i = m_largeFileTable->rowCount() - 1; i >= 0; --i) {
@@ -959,10 +1035,15 @@ void SystemSlimmerWidget::onDeleteSelected()
             QCheckBox *checkBox = checkWidget ? checkWidget->findChild<QCheckBox*>() : nullptr;
             if (checkBox && checkBox->isChecked()) {
                 QString path = m_largeFileTable->item(i, 2)->data(Qt::UserRole).toString();
+                // 获取文件大小
+                QFileInfo fileInfo(path);
+                qint64 fileSize = fileInfo.exists() ? fileInfo.size() : 0;
                 QString error;
                 if (SystemSlimmer::deleteFile(path, &error)) {
                     m_largeFileTable->removeRow(i);
                     deleted++;
+                    totalFreed += fileSize;
+                    deletedFiles.append(path);
                 } else {
                     failedFiles.append(path);
                 }
@@ -974,15 +1055,26 @@ void SystemSlimmerWidget::onDeleteSelected()
             QCheckBox *checkBox = checkWidget ? checkWidget->findChild<QCheckBox*>() : nullptr;
             if (checkBox && checkBox->isChecked()) {
                 QString path = m_duplicateTable->item(i, 2)->data(Qt::UserRole).toString();
+                // 获取文件大小
+                QFileInfo fileInfo(path);
+                qint64 fileSize = fileInfo.exists() ? fileInfo.size() : 0;
                 QString error;
                 if (SystemSlimmer::deleteFile(path, &error)) {
                     m_duplicateTable->removeRow(i);
                     deleted++;
+                    totalFreed += fileSize;
+                    deletedFiles.append(path);
                 } else {
                     failedFiles.append(path);
                 }
             }
         }
+    }
+    
+    // 记录清理历史
+    if (deleted > 0 || !failedFiles.isEmpty()) {
+        CleanupHistoryWidget::addHistory(tr("系统瘦身-删除文件"), totalFreed, deleted, failedFiles.size(), deletedFiles);
+        emit historyChanged();
     }
     
     if (!failedFiles.isEmpty()) {
@@ -998,7 +1090,9 @@ void SystemSlimmerWidget::onMoveToTrash()
 {
     // 执行移动到回收站
     int moved = 0;
+    qint64 totalFreed = 0;
     QStringList failedFiles;
+    QStringList movedFiles;
     
     if (m_resultStack->currentWidget() == m_largeFileResultPage) {
         for (int i = m_largeFileTable->rowCount() - 1; i >= 0; --i) {
@@ -1006,10 +1100,15 @@ void SystemSlimmerWidget::onMoveToTrash()
             QCheckBox *checkBox = checkWidget ? checkWidget->findChild<QCheckBox*>() : nullptr;
             if (checkBox && checkBox->isChecked()) {
                 QString path = m_largeFileTable->item(i, 2)->data(Qt::UserRole).toString();
+                // 获取文件大小
+                QFileInfo fileInfo(path);
+                qint64 fileSize = fileInfo.exists() ? fileInfo.size() : 0;
                 QString error;
                 if (SystemSlimmer::moveToTrash(path, &error)) {
                     m_largeFileTable->removeRow(i);
                     moved++;
+                    totalFreed += fileSize;
+                    movedFiles.append(path);
                 } else {
                     failedFiles.append(path);
                 }
@@ -1021,15 +1120,26 @@ void SystemSlimmerWidget::onMoveToTrash()
             QCheckBox *checkBox = checkWidget ? checkWidget->findChild<QCheckBox*>() : nullptr;
             if (checkBox && checkBox->isChecked()) {
                 QString path = m_duplicateTable->item(i, 2)->data(Qt::UserRole).toString();
+                // 获取文件大小
+                QFileInfo fileInfo(path);
+                qint64 fileSize = fileInfo.exists() ? fileInfo.size() : 0;
                 QString error;
                 if (SystemSlimmer::moveToTrash(path, &error)) {
                     m_duplicateTable->removeRow(i);
                     moved++;
+                    totalFreed += fileSize;
+                    movedFiles.append(path);
                 } else {
                     failedFiles.append(path);
                 }
             }
         }
+    }
+    
+    // 记录清理历史
+    if (moved > 0 || !failedFiles.isEmpty()) {
+        CleanupHistoryWidget::addHistory(tr("系统瘦身-移至回收站"), totalFreed, moved, failedFiles.size(), movedFiles);
+        emit historyChanged();
     }
     
     if (!failedFiles.isEmpty()) {
@@ -1086,6 +1196,14 @@ QString SystemSlimmerWidget::formatFileSize(qint64 bytes)
 void SystemSlimmerWidget::applyTheme()
 {
     // 主题适配已在各控件样式中设置
+}
+
+bool SystemSlimmerWidget::isDarkTheme()
+{
+    QPalette palette = qApp->palette();
+    QColor windowColor = palette.color(QPalette::Window);
+    int brightness = (windowColor.red() * 299 + windowColor.green() * 587 + windowColor.blue() * 114) / 1000;
+    return brightness < 128;
 }
 
 void SystemSlimmerWidget::onLargeFileContextMenu(const QPoint &pos)

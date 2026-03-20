@@ -4,6 +4,7 @@
  */
 
 #include "startupappswidget.h"
+#include "cleanuphistorywidget.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QMessageBox>
@@ -167,6 +168,12 @@ void StartupAppItem::onCheckBoxToggled(bool checked)
     
     m_info.enabled = checked;
     applyTheme();
+    
+    // 记录清理历史
+    QString operation = checked ? tr("启用自启动") : tr("禁用自启动");
+    CleanupHistoryWidget::addHistory(tr("自启动管理-") + operation, 0, 1, 0, QStringList() << m_info.name);
+    emit historyChanged();
+    
     emit statusChanged();
 }
 
@@ -178,6 +185,9 @@ void StartupAppItem::onDeleteClicked()
     
     if (reply == QMessageBox::Yes) {
         if (QFile::remove(m_info.filePath)) {
+            // 记录清理历史
+            CleanupHistoryWidget::addHistory(tr("自启动管理-删除"), 0, 1, 0, QStringList() << m_info.name);
+            emit historyChanged();
             emit deleteRequested();
         } else {
             QMessageBox::warning(this, tr("删除失败"), tr("无法删除文件: %1").arg(m_info.filePath));
@@ -539,6 +549,7 @@ void StartupAppsWidget::loadApps()
         
         connect(appItem, &StartupAppItem::statusChanged, this, &StartupAppsWidget::onAppStatusChanged);
         connect(appItem, &StartupAppItem::deleteRequested, this, &StartupAppsWidget::onDirectoryChanged);
+        connect(appItem, &StartupAppItem::historyChanged, this, &StartupAppsWidget::historyChanged);
         connect(appItem, &StartupAppItem::editRequested, this, [this, fileInfo]() {
             StartupAppEditDialog dialog(fileInfo.absoluteFilePath(), this);
             connect(&dialog, &StartupAppEditDialog::saved, this, &StartupAppsWidget::onDirectoryChanged);

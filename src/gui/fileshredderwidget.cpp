@@ -4,6 +4,7 @@
  */
 
 #include "fileshredderwidget.h"
+#include "cleanuphistorywidget.h"
 #include "../utils/logger.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -69,6 +70,22 @@ FileShredderWidget::~FileShredderWidget()
 
 void FileShredderWidget::initUI()
 {
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString dropAreaTextColor = darkMode ? "#e0e0e0" : "#5D6D7E";
+    QString dropHintTextColor = darkMode ? "#a0a0a0" : "#95A5A6";
+    QString dropCardBg = darkMode ? "#3d3d3d" : "#F8F9FA";
+    QString dropCardBorder = darkMode ? "#555555" : "#BDC3C7";
+    QString dropCardHoverBg = darkMode ? "#2a4a5a" : "#E8F4FD";
+    QString listCardBg = darkMode ? "#3d3d3d" : "white";
+    QString listCardBorder = darkMode ? "#555555" : "#E5E8E8";
+    QString listTitleColor = darkMode ? "#e0e0e0" : "#2C3E50";
+    QString listSizeColor = darkMode ? "#a0a0a0" : "#7F8C8D";
+    QString privilegeCardBg = darkMode ? "#3d3d3d" : "#F8F9FA";
+    QString privilegeCardBorder = darkMode ? "#555555" : "#E5E8E8";
+    QString privilegeTitleColor = darkMode ? "#e0e0e0" : "#2C3E50";
+    QString progressBg = darkMode ? "#4a4a4a" : "#ECF0F1";
+
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setSpacing(20);
     mainLayout->setContentsMargins(25, 25, 25, 25);
@@ -111,15 +128,15 @@ void FileShredderWidget::initUI()
     dropCard->setObjectName("dropCard");
     dropCard->setMaximumHeight(80);
     dropCard->setStyleSheet(
-        "QFrame#dropCard { "
-        "   background-color: #F8F9FA; "
-        "   border: 2px dashed #BDC3C7; "
+        QString("QFrame#dropCard { "
+        "   background-color: %1; "
+        "   border: 2px dashed %2; "
         "   border-radius: 8px; "
         "}"
         "QFrame#dropCard:hover { "
         "   border-color: #0081FF; "
-        "   background-color: #E8F4FD; "
-        "}"
+        "   background-color: %3; "
+        "}").arg(dropCardBg, dropCardBorder, dropCardHoverBg)
     );
 
     QHBoxLayout *dropLayout = new QHBoxLayout(dropCard);
@@ -138,11 +155,12 @@ void FileShredderWidget::initUI()
     dropTextLayout->setContentsMargins(0, 0, 0, 0);
 
     m_dropAreaLabel = new QLabel(tr("拖拽文件或文件夹到此处"), dropCard);
-    m_dropAreaLabel->setStyleSheet("font-size: 14px; color: #5D6D7E; font-weight: 500; background: transparent;");
+    m_dropAreaLabel->setStyleSheet(QString("font-size: 14px; color: %1; font-weight: 500; background: transparent;").arg(dropAreaTextColor));
     dropTextLayout->addWidget(m_dropAreaLabel);
 
     QLabel *dropHint = new QLabel(tr("或点击下方按钮添加"), dropCard);
-    dropHint->setStyleSheet("font-size: 11px; color: #95A5A6; background: transparent;");
+    dropHint->setObjectName("dropHint");
+    dropHint->setStyleSheet(QString("font-size: 11px; color: %1; background: transparent;").arg(dropHintTextColor));
     dropTextLayout->addWidget(dropHint);
 
     dropLayout->addLayout(dropTextLayout);
@@ -251,11 +269,11 @@ void FileShredderWidget::initUI()
     QFrame *listCard = new QFrame(this);
     listCard->setObjectName("listCard");
     listCard->setStyleSheet(
-        "QFrame#listCard { "
-        "   background-color: white; "
-        "   border: 1px solid #E5E8E8; "
+        QString("QFrame#listCard { "
+        "   background-color: %1; "
+        "   border: 1px solid %2; "
         "   border-radius: 12px; "
-        "}"
+        "}").arg(listCardBg, listCardBorder)
     );
     
     QVBoxLayout *listCardLayout = new QVBoxLayout(listCard);
@@ -265,15 +283,26 @@ void FileShredderWidget::initUI()
     // 列表头部
     QHBoxLayout *listHeaderLayout = new QHBoxLayout();
     QLabel *listLabel = new QLabel("📋 " + tr("待粉碎文件列表"), this);
-    listLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #2C3E50; background: transparent;");
+    listLabel->setObjectName("listLabel");
+    listLabel->setStyleSheet(QString("font-size: 14px; font-weight: bold; color: %1; background: transparent;").arg(listTitleColor));
     listHeaderLayout->addWidget(listLabel);
     listHeaderLayout->addStretch();
     
     // 总大小显示
     m_totalSizeLabel = new QLabel(tr("总大小: 0 B | 0 个项目"), this);
-    m_totalSizeLabel->setStyleSheet("font-size: 12px; color: #7F8C8D; background: transparent;");
+    m_totalSizeLabel->setObjectName("totalSizeLabel");
+    m_totalSizeLabel->setStyleSheet(QString("font-size: 12px; color: %1; background: transparent;").arg(listSizeColor));
     listHeaderLayout->addWidget(m_totalSizeLabel);
     listCardLayout->addLayout(listHeaderLayout);
+    
+    // 深色主题列表样式
+    QString listItemBg = darkMode ? "#4a4a4a" : "#F8F9FA";
+    QString listItemHover = darkMode ? "#5a5a5a" : "#EBF5FB";
+    QString listItemSelected = darkMode ? "#4a90d9" : "#D4E6F1";
+    QString listItemSelectedColor = darkMode ? "white" : "#2C3E50";
+    QString listScrollBg = darkMode ? "#3d3d3d" : "#F0F0F0";
+    QString listScrollHandle = darkMode ? "#666666" : "#BDC3C7";
+    QString listScrollHandleHover = darkMode ? "#888888" : "#95A5A6";
     
     // 文件列表 - 占据更多空间
     m_fileList = new QListWidget(this);
@@ -283,43 +312,44 @@ void FileShredderWidget::initUI()
     m_fileList->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_fileList->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_fileList->setStyleSheet(
-        "QListWidget { "
+        QString("QListWidget { "
         "   background-color: transparent; "
         "   border: none; "
         "   padding: 0px; "
+        "   color: %1; "
         "} "
         "QListWidget::item { "
         "   padding: 10px 12px; "
         "   margin: 3px 0px; "
-        "   background-color: #F8F9FA; "
+        "   background-color: %2; "
         "   border-radius: 6px; "
         "   border-left: 4px solid #0081FF; "
         "   font-size: 13px; "
         "} "
         "QListWidget::item:hover { "
-        "   background-color: #EBF5FB; "
+        "   background-color: %3; "
         "} "
         "QListWidget::item:selected { "
-        "   background-color: #D4E6F1; "
-        "   color: #2C3E50; "
+        "   background-color: %4; "
+        "   color: %5; "
         "   border-left: 4px solid #0052A3; "
         "}"
         "QScrollBar:vertical { "
-        "   background-color: #F0F0F0; "
+        "   background-color: %6; "
         "   width: 10px; "
         "   border-radius: 5px; "
         "} "
         "QScrollBar::handle:vertical { "
-        "   background-color: #BDC3C7; "
+        "   background-color: %7; "
         "   border-radius: 5px; "
         "   min-height: 20px; "
         "} "
         "QScrollBar::handle:vertical:hover { "
-        "   background-color: #95A5A6; "
+        "   background-color: %8; "
         "} "
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
         "   height: 0px; "
-        "}"
+        "}").arg(listTitleColor, listItemBg, listItemHover, listItemSelected, listItemSelectedColor, listScrollBg, listScrollHandle, listScrollHandleHover)
     );
     listCardLayout->addWidget(m_fileList, 1);
 
@@ -328,19 +358,20 @@ void FileShredderWidget::initUI()
     m_progressBar->setTextVisible(true);
     m_progressBar->setFormat("%p%");
     m_progressBar->setStyleSheet(
-        "QProgressBar { "
+        QString("QProgressBar { "
         "   border: none; "
         "   border-radius: 6px; "
-        "   background-color: #ECF0F1; "
+        "   background-color: %1; "
         "   text-align: center; "
         "   font-size: 12px; "
         "   font-weight: bold; "
         "   height: 20px; "
+        "   color: white; "
         "} "
         "QProgressBar::chunk { "
         "   background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3498DB, stop:1 #2980B9); "
         "   border-radius: 6px; "
-        "}"
+        "}").arg(progressBg)
     );
     m_progressBar->setVisible(false);
     listCardLayout->addWidget(m_progressBar);
@@ -379,11 +410,11 @@ void FileShredderWidget::initUI()
     QFrame *privilegeCard = new QFrame(this);
     privilegeCard->setObjectName("privilegeCard");
     privilegeCard->setStyleSheet(
-        "QFrame#privilegeCard { "
-        "   background-color: #F8F9FA; "
-        "   border: 1px solid #E5E8E8; "
+        QString("QFrame#privilegeCard { "
+        "   background-color: %1; "
+        "   border: 1px solid %2; "
         "   border-radius: 8px; "
-        "}"
+        "}").arg(privilegeCardBg, privilegeCardBorder)
     );
     
     QHBoxLayout *privilegeLayout = new QHBoxLayout(privilegeCard);
@@ -398,7 +429,8 @@ void FileShredderWidget::initUI()
 
     // 标题（包含描述文字）
     QLabel *privilegeTitle = new QLabel(tr("权限提升（处理只读、root权限、immutable属性等顽固文件）"), this);
-    privilegeTitle->setStyleSheet("font-size: 13px; font-weight: bold; color: #2C3E50; background: transparent;");
+    privilegeTitle->setObjectName("privilegeTitle");
+    privilegeTitle->setStyleSheet(QString("font-size: 13px; font-weight: bold; color: %1; background: transparent;").arg(privilegeTitleColor));
     privilegeLayout->addWidget(privilegeTitle);
 
     privilegeLayout->addStretch();
@@ -740,10 +772,12 @@ void FileShredderWidget::onShredFinished(const QList<ShredResult> &results)
     int failCount = 0;
     int privilegeCount = 0;
     QStringList failedFiles;
+    QStringList successFiles;
 
     for (const ShredResult &result : results) {
         if (result.success) {
             successCount++;
+            successFiles.append(result.filePath);
             if (result.usedPrivilege) {
                 privilegeCount++;
             }
@@ -760,6 +794,12 @@ void FileShredderWidget::onShredFinished(const QList<ShredResult> &results)
     }
 
     updateTotalSize();
+    
+    // 记录清理历史
+    if (successCount > 0 || failCount > 0) {
+        CleanupHistoryWidget::addHistory(tr("文件粉碎"), 0, successCount, failCount, successFiles);
+        emit historyChanged();
+    }
 
     QString message = tr("粉碎完成！\n成功: %1 个\n失败: %2 个")
         .arg(successCount).arg(failCount);
@@ -809,12 +849,8 @@ void FileShredderWidget::applyTheme()
     bool darkMode = isDarkTheme();
 
     if (darkMode) {
-        setStyleSheet(
-            "FileShredderWidget { background-color: #2d2d2d; }"
-            "QLabel { color: #e0e0e0; }"
-            "QListWidget { background-color: #3d3d3d; color: #e0e0e0; border: 1px solid #555; }"
-            "QListWidget::item:selected { background-color: #4a90d9; }"
-        );
+        setStyleSheet("FileShredderWidget { background-color: #2d2d2d; }");
+        
         // 深色主题下警告框样式
         m_warningFrame->setStyleSheet(
             "QFrame#warningFrame { "
@@ -830,10 +866,7 @@ void FileShredderWidget::applyTheme()
             "background: transparent; "
         );
     } else {
-        setStyleSheet(
-            "FileShredderWidget { background-color: #F5F5F5; }"
-            "QLabel { color: #333; }"
-        );
+        setStyleSheet("FileShredderWidget { background-color: #F5F5F5; }");
         // 浅色主题下警告框样式
         m_warningFrame->setStyleSheet(
             "QFrame#warningFrame { "

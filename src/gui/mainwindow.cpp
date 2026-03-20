@@ -5,6 +5,7 @@
 
 #include "mainwindow.h"
 #include "analyzewidget.h"
+#include "sponsordialog.h"
 #include "../core/systeminfo.h"
 #include "../utils/logger.h"
 #include "../utils/config.h"
@@ -32,6 +33,7 @@
 #include <QScreen>
 #include <QGuiApplication>
 #include <QElapsedTimer>
+#include <QRandomGenerator>
 
 #ifdef HAVE_XCB
 #include <xcb/xcb.h>
@@ -75,6 +77,10 @@ MainWindow::MainWindow(QWidget *parent)
     , m_analyzeWidget(nullptr)
     , m_resourcesWidget(nullptr)
     , m_fileShredderWidget(nullptr)
+    , m_systemSlimmerWidget(nullptr)
+    , m_startupAppsWidget(nullptr)
+    , m_aptSourceManagerWidget(nullptr)
+    , m_cleanupHistoryWidget(nullptr)
     , m_analyzeButton(nullptr)
     , m_smartCleanupButton(nullptr)
     , m_customCleanupButton(nullptr)
@@ -90,12 +96,18 @@ MainWindow::MainWindow(QWidget *parent)
     , m_lastGeometry(0, 0, 0, 0)
     , m_restoreHoverTimer(nullptr)
     , m_restoreHoverTriggered(false)
+    , m_sponsorTimer(nullptr)
+    , m_sponsorShowCount(0)
+    , m_trayIcon(nullptr)
+    , m_trayMenu(nullptr)
+    , m_canClose(false)
 {
     LOG_INFO("Initializing main window");
     
     initUI();
     connectSignals();
     applyTheme();
+    createTrayIcon();  // 创建系统托盘
     
     LOG_INFO("Main window initialized");
 }
@@ -128,13 +140,13 @@ void MainWindow::initUI()
             // 先设置一个合理的初始大小，稍后在showEvent中最大化
             resize(screenWidth - 100, screenHeight - 100);
         } else {
-            // 屏幕较大，使用固定大小 1100x860
-            resize(1100, 860);
-            LOG_INFO("Large screen detected, using default size: 1100x860");
+            // 屏幕较大，使用固定大小 1100x780
+            resize(1100, 780);
+            LOG_INFO("Large screen detected, using default size: 1100x780");
         }
     } else {
         // 无法获取屏幕信息，使用默认大小
-        resize(1100, 860);
+        resize(1100, 780);
         LOG_WARNING("Could not get screen info, using default size");
     }
     
@@ -180,6 +192,18 @@ void MainWindow::initUI()
     // APT 源管理页面
     m_aptSourceManagerWidget = new APTSourceManagerWidget(this);
     m_tabWidget->addTab(m_aptSourceManagerWidget, tr("源管理"));
+    
+    // 清理历史页面
+    m_cleanupHistoryWidget = new CleanupHistoryWidget(this);
+    m_tabWidget->addTab(m_cleanupHistoryWidget, tr("清理历史"));
+    
+    // 连接各组件的历史变化信号，自动刷新清理历史
+    connect(m_fileShredderWidget, &FileShredderWidget::historyChanged, 
+            m_cleanupHistoryWidget, &CleanupHistoryWidget::refresh);
+    connect(m_systemSlimmerWidget, &SystemSlimmerWidget::historyChanged, 
+            m_cleanupHistoryWidget, &CleanupHistoryWidget::refresh);
+    connect(m_startupAppsWidget, &StartupAppsWidget::historyChanged, 
+            m_cleanupHistoryWidget, &CleanupHistoryWidget::refresh);
     
     mainLayout->addWidget(m_tabWidget, 1);
     
@@ -323,7 +347,7 @@ void MainWindow::createMenuBar()
                 
                 // 固定的窗口大小
                 int windowWidth = 1100;
-                int windowHeight = 860;
+                int windowHeight = 780;
                 
                 // 计算居中位置
                 int x = (screenGeometry.width() - windowWidth) / 2 + screenGeometry.x();
@@ -354,7 +378,7 @@ void MainWindow::createMenuBar()
             
             // 固定的窗口大小
             int windowWidth = 1100;
-            int windowHeight = 860;
+            int windowHeight = 780;
             
             // 计算居中位置
             int x = (screenGeometry.width() - windowWidth) / 2 + screenGeometry.x();
@@ -370,7 +394,7 @@ void MainWindow::createMenuBar()
                 .arg(x).arg(y).arg(windowWidth).arg(windowHeight));
         } else {
             // 无法获取屏幕信息，使用默认位置
-            resize(1100, 860);
+            resize(1100, 780);
             if (!m_normalGeometry.isNull()) {
                 setGeometry(m_normalGeometry);
             }
@@ -436,6 +460,27 @@ void MainWindow::createStatusBar()
     m_progressBar->setMaximumWidth(200);
     m_progressBar->setVisible(false);
     statusBar->addPermanentWidget(m_progressBar);
+    
+    // 添加赞助按钮到状态栏右下角（初始隐藏）
+    m_sponsorButton = new QPushButton(tr("💝 赞助支持"), this);
+    m_sponsorButton->setFlat(true);
+    m_sponsorButton->setCursor(Qt::PointingHandCursor);
+    m_sponsorButton->setStyleSheet(
+        "QPushButton {"
+        "  color: #ff6b6b;"
+        "  padding: 2px 8px;"
+        "  border-radius: 3px;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: rgba(255, 107, 107, 0.1);"
+        "}"
+    );
+    connect(m_sponsorButton, &QPushButton::clicked, this, &MainWindow::onSponsorClicked);
+    m_sponsorButton->setVisible(false);  // 初始隐藏
+    statusBar->addPermanentWidget(m_sponsorButton);
+    
+    // 设置赞助按钮随机显示定时器
+    setupSponsorTimer();
 }
 
 void MainWindow::connectSignals()
@@ -594,6 +639,58 @@ void MainWindow::onSettingsClicked()
     }
 }
 
+void MainWindow::onSponsorClicked()
+{
+    LOG_INFO("Sponsor button clicked");
+    SponsorDialog dialog(this);
+    dialog.exec();
+    
+    // 点击后隐藏按钮，重新启动随机定时器
+    m_sponsorButton->setVisible(false);
+    m_sponsorShowCount++;
+    setupSponsorTimer();
+}
+
+void MainWindow::setupSponsorTimer()
+{
+    // 删除旧定时器
+    if (m_sponsorTimer) {
+        m_sponsorTimer->stop();
+        delete m_sponsorTimer;
+        m_sponsorTimer = nullptr;
+    }
+    
+    m_sponsorTimer = new QTimer(this);
+    m_sponsorTimer->setSingleShot(true);
+    
+    connect(m_sponsorTimer, &QTimer::timeout, this, [this]() {
+        // 显示赞助按钮
+        m_sponsorButton->setVisible(true);
+        m_sponsorShowCount++;
+        
+        // 显示60秒后自动隐藏
+        QTimer::singleShot(60000, this, [this]() {
+            if (m_sponsorButton->isVisible()) {
+                m_sponsorButton->setVisible(false);
+                // 重新启动随机定时器
+                setupSponsorTimer();
+            }
+        });
+    });
+    
+    // 计算延迟时间
+    int delayMs;
+    if (m_sponsorShowCount == 0) {
+        // 首次：启动30秒后显示
+        delayMs = 30000;
+    } else {
+        // 之后：随机5-15分钟显示
+        delayMs = (300 + QRandomGenerator::global()->bounded(600)) * 1000;
+    }
+    
+    m_sponsorTimer->start(delayMs);
+}
+
 void MainWindow::onAboutClicked()
 {
     LOG_INFO("About button clicked");
@@ -606,7 +703,7 @@ void MainWindow::onAboutClicked()
         this,
         tr("关于"),
         tr("<h3>磁盘清理工具-%1版</h3>"
-           "<p><b>版本号：</b>v1.1.0</p>"
+           "<p><b>版本号：</b>v1.1.1</p>"
            "<p>一个专为 %2 系统设计的磁盘清理工具。</p>"
            "<p><b>功能特性：</b></p>"
            "<ul>"
@@ -649,15 +746,30 @@ void MainWindow::onCleanupFinished(const QList<CleanupResult> &results)
     
     qint64 totalFreed = 0;
     QString detailText;
+    int successCount = 0;
+    int failCount = 0;
+    QStringList detailItems;
     
     for (const CleanupResult &result : results) {
         totalFreed += result.freedSpace;
+        if (result.success) {
+            successCount++;
+        } else {
+            failCount++;
+        }
         QString statusIcon = result.success ? "✓" : "✗";
         QString sizeText = result.success ? formatSize(result.freedSpace) : result.errorMessage;
         detailText += QString("%1 %2: %3\n").arg(statusIcon, result.itemName, sizeText);
+        detailItems.append(QString("%1 %2: %3").arg(statusIcon, result.itemName, sizeText));
     }
     
     QString freedText = formatSize(totalFreed);
+    
+    // 记录清理历史
+    CleanupHistoryWidget::addHistory(tr("智能清理"), totalFreed, successCount, failCount, detailItems);
+    if (m_cleanupHistoryWidget) {
+        m_cleanupHistoryWidget->refresh();
+    }
     
     m_statusLabel->setText(tr("清理完成，释放空间: %1").arg(freedText));
     m_progressBar->setVisible(false);
@@ -1053,10 +1165,25 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
         m_analyzeWidget->removeCleanedItems(cleanedItems);
     }
     
+    // 收集详细清理项目
+    QStringList detailItems;
+    for (const ScanResult &item : cleanedItems) {
+        QString statusIcon = "✓";
+        detailItems.append(QString("%1 %2: %3").arg(statusIcon, item.name, formatSize(item.size)));
+    }
+    
     QString resultText = tr("清理完成！\n\n成功: %1 项\n失败: %2 项\n释放空间: %3")
         .arg(successCount)
         .arg(failCount)
         .arg(formatSize(totalFreed));
+    
+    // 记录清理历史
+    if (successCount > 0 || failCount > 0) {
+        CleanupHistoryWidget::addHistory(tr("磁盘分析清理"), totalFreed, successCount, failCount, detailItems);
+        if (m_cleanupHistoryWidget) {
+            m_cleanupHistoryWidget->refresh();
+        }
+    }
     
     m_statusLabel->setText(tr("清理完成，释放空间: %1").arg(formatSize(totalFreed)));
     m_progressBar->setVisible(false);
@@ -1071,10 +1198,29 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     LOG_INFO("Main window closing");
     
-    // 保存配置
-    Config::instance()->save();
+    // 如果允许关闭（从托盘退出），则正常关闭
+    if (m_canClose) {
+        // 保存配置
+        Config::instance()->save();
+        QMainWindow::closeEvent(event);
+        return;
+    }
     
-    QMainWindow::closeEvent(event);
+    // 否则最小化到托盘
+    event->ignore();
+    hide();
+    
+    // 首次最小化时显示提示
+    static bool firstTime = true;
+    if (firstTime && m_trayIcon) {
+        m_trayIcon->showMessage(
+            tr("磁盘清理工具"),
+            tr("程序已最小化到系统托盘，点击图标可恢复窗口"),
+            QSystemTrayIcon::Information,
+            2000
+        );
+        firstTime = false;
+    }
 }
 
 void MainWindow::showEvent(QShowEvent *event)
@@ -1555,4 +1701,90 @@ void MainWindow::checkRestoreButtonHover()
     }
     
     m_lastMousePos = globalMousePos;
+}
+
+// 系统托盘功能
+void MainWindow::createTrayIcon()
+{
+    // 创建托盘图标
+    m_trayIcon = new QSystemTrayIcon(this);
+    m_trayIcon->setIcon(QIcon(":/icons/app_icon.svg"));
+    m_trayIcon->setToolTip(tr("磁盘清理工具"));
+    
+    // 创建托盘菜单
+    m_trayMenu = new QMenu(this);
+    
+    QAction *showAction = m_trayMenu->addAction(tr("显示主窗口"));
+    showAction->setIcon(QIcon(":/icons/dashboard.svg"));
+    connect(showAction, &QAction::triggered, this, &MainWindow::onTrayShowWindow);
+    
+    QAction *cleanupAction = m_trayMenu->addAction(tr("一键智能清理"));
+    cleanupAction->setIcon(QIcon(":/icons/cleanup.svg"));
+    connect(cleanupAction, &QAction::triggered, this, &MainWindow::onTrayCleanup);
+    
+    m_trayMenu->addSeparator();
+    
+    QAction *quitAction = m_trayMenu->addAction(tr("退出"));
+    quitAction->setIcon(QIcon::fromTheme("application-exit"));
+    connect(quitAction, &QAction::triggered, this, &MainWindow::onTrayQuit);
+    
+    m_trayIcon->setContextMenu(m_trayMenu);
+    
+    // 连接托盘图标激活信号（单击/双击）
+    connect(m_trayIcon, &QSystemTrayIcon::activated, this, &MainWindow::onTrayIconActivated);
+    
+    // 显示托盘图标
+    m_trayIcon->show();
+    
+    LOG_INFO("System tray icon created");
+}
+
+void MainWindow::onTrayIconActivated(QSystemTrayIcon::ActivationReason reason)
+{
+    switch (reason) {
+    case QSystemTrayIcon::Trigger:
+    case QSystemTrayIcon::DoubleClick:
+        // 单击或双击显示窗口
+        onTrayShowWindow();
+        break;
+    default:
+        break;
+    }
+}
+
+void MainWindow::onTrayShowWindow()
+{
+    show();
+    activateWindow();
+    raise();
+    
+    // 如果是最小化状态，恢复窗口
+    if (isMinimized()) {
+        showNormal();
+    }
+    
+    LOG_INFO("Window restored from system tray");
+}
+
+void MainWindow::onTrayCleanup()
+{
+    // 显示窗口并执行智能清理
+    onTrayShowWindow();
+    onSmartCleanupClicked();
+}
+
+void MainWindow::onTrayQuit()
+{
+    LOG_INFO("Quitting from system tray");
+    
+    // 设置允许关闭标志
+    m_canClose = true;
+    
+    // 隐藏托盘图标
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+    }
+    
+    // 关闭窗口
+    close();
 }

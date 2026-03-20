@@ -83,6 +83,7 @@ private:
     qint64 readSystemFile(const QString &path);
     QString formatSize(qint64 bytes, bool withUnit = true) const;
     QString formatSpeed(qint64 bytesPerSec) const;
+    bool isDarkTheme();
 
 private:
     // 定时器

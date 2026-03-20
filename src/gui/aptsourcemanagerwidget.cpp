@@ -173,7 +173,13 @@ void APTSourceEditDialog::initUI()
     m_previewEdit = new QTextEdit(this);
     m_previewEdit->setReadOnly(true);
     m_previewEdit->setMaximumHeight(80);
-    m_previewEdit->setStyleSheet("background-color: #f5f5f5; font-family: monospace;");
+    // 根据主题设置预览框样式
+    bool darkMode = qApp->palette().window().color().lightness() < 128;
+    if (darkMode) {
+        m_previewEdit->setStyleSheet("background-color: #2d2d2d; color: #e0e0e0; font-family: monospace; border: 1px solid #555; border-radius: 4px;");
+    } else {
+        m_previewEdit->setStyleSheet("background-color: #f5f5f5; color: #333333; font-family: monospace; border: 1px solid #ddd; border-radius: 4px;");
+    }
     mainLayout->addWidget(m_previewEdit);
 
     // 按钮

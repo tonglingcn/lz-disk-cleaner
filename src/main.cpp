@@ -11,8 +11,14 @@
 #include <QTranslator>
 #include <QStyleFactory>
 #include <QGuiApplication>
+#include <QSharedMemory>
+#include <QLocalSocket>
+#include <QLocalServer>
 #include "gui/mainwindow.h"
 #include "utils/logger.h"
+
+// 单实例服务器名称
+static const QString SINGLE_INSTANCE_SERVER = "lz-disk-cleaner-single-instance";
 
 int main(int argc, char *argv[])
 {
@@ -25,9 +31,29 @@ int main(int argc, char *argv[])
     
     // 设置应用程序信息
     app.setApplicationName("LZ Disk Cleaner");
-    app.setApplicationVersion("1.1.0");
+    app.setApplicationVersion("1.1.1");
     app.setOrganizationName("LZ");
     app.setOrganizationDomain("github.com/tonglingcn");
+    
+    // 单实例检测 - 尝试连接已存在的实例
+    QLocalSocket socket;
+    socket.connectToServer(SINGLE_INSTANCE_SERVER);
+    if (socket.waitForConnected(500)) {
+        // 已有实例运行，发送激活命令
+        LOG_INFO("Another instance is running, sending activation request");
+        socket.write("SHOW");
+        socket.waitForBytesWritten();
+        socket.disconnectFromServer();
+        return 0;  // 退出当前实例
+    }
+    
+    // 创建本地服务器用于单实例通信
+    QLocalServer server;
+    // 清理可能残留的服务器文件
+    QLocalServer::removeServer(SINGLE_INSTANCE_SERVER);
+    if (!server.listen(SINGLE_INSTANCE_SERVER)) {
+        LOG_ERROR("Failed to create single instance server");
+    }
     
     // 设置应用图标
     app.setWindowIcon(QIcon(":/icons/app_icon.svg"));
@@ -46,6 +72,27 @@ int main(int argc, char *argv[])
     // 创建并显示主窗口
     MainWindow window;
     window.show();
+    
+    // 监听其他实例的连接请求
+    QObject::connect(&server, &QLocalServer::newConnection, [&window, &server]() {
+        QLocalSocket *clientSocket = server.nextPendingConnection();
+        if (clientSocket) {
+            clientSocket->waitForReadyRead(1000);
+            QByteArray data = clientSocket->readAll();
+            if (data == "SHOW") {
+                LOG_INFO("Received activation request from another instance");
+                window.show();
+                window.activateWindow();
+                window.raise();
+                // 如果是最小化状态，恢复窗口
+                if (window.isMinimized()) {
+                    window.showNormal();
+                }
+            }
+            clientSocket->disconnectFromServer();
+            clientSocket->deleteLater();
+        }
+    });
     
     // 运行应用
     int result = app.exec();

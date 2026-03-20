@@ -38,6 +38,7 @@ public:
     CleanupResult cleanLinglongApps(const QStringList &appIds);
     CleanupResult cleanBrowserCache();
     CleanupResult cleanDevCache();
+    CleanupResult cleanAppCache();  // 清理应用缓存（WPS等）
     
     // 智能清理
     QList<CleanupResult> smartCleanup();

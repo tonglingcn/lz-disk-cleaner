@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     app.setApplicationName("lz-disk-cleaner-helper");
-    app.setApplicationVersion("1.1.0");
+    app.setApplicationVersion("1.1.1");
     
     QCommandLineParser parser;
     parser.setApplicationDescription("LZ Disk Cleaner Helper - Execute privileged cleanup operations");

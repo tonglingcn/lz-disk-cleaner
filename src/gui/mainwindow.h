@@ -15,6 +15,8 @@
 #include <QRect>
 #include <QWindow>
 #include <QTimer>
+#include <QSystemTrayIcon>
+#include <QMenu>
 #include "../core/diskanalyzer.h"
 #include "../core/diskcleaner.h"
 #include "dashboardwidget.h"
@@ -24,6 +26,7 @@
 #include "systemslimmerwidget.h"
 #include "startupappswidget.h"
 #include "aptsourcemanagerwidget.h"
+#include "cleanuphistorywidget.h"
 #include "cleanupdialog.h"
 #include "progressdialog.h"
 #include "settingsdialog.h"
@@ -48,6 +51,7 @@ private slots:
     void onSmartCleanupClicked();
     void onCustomCleanupClicked();
     void onSettingsClicked();
+    void onSponsorClicked();
     void onAboutClicked();
     
     void onAnalysisFinished();
@@ -57,6 +61,12 @@ private slots:
     
     // DDE窗口状态检测定时器
     void onWindowStateCheck();
+    
+    // 系统托盘
+    void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
+    void onTrayShowWindow();
+    void onTrayCleanup();
+    void onTrayQuit();
 
 private:
     void initUI();
@@ -78,6 +88,7 @@ private:
     SystemSlimmerWidget *m_systemSlimmerWidget;
     StartupAppsWidget *m_startupAppsWidget;
     APTSourceManagerWidget *m_aptSourceManagerWidget;
+    CleanupHistoryWidget *m_cleanupHistoryWidget;
     
     QPushButton *m_analyzeButton;
     QPushButton *m_smartCleanupButton;
@@ -85,6 +96,7 @@ private:
     
     QLabel *m_statusLabel;
     QProgressBar *m_progressBar;
+    QPushButton *m_sponsorButton;
     
     // 核心组件
     DiskAnalyzer *m_analyzer;
@@ -108,7 +120,18 @@ private:
     bool m_restoreHoverTriggered;
     QPoint m_lastMousePos;
     
+    // 赞助按钮随机显示定时器
+    QTimer *m_sponsorTimer;
+    int m_sponsorShowCount;  // 记录显示次数
+    
     void checkRestoreButtonHover();
+    void setupSponsorTimer();
+    void createTrayIcon();
+    
+    // 系统托盘
+    QSystemTrayIcon *m_trayIcon;
+    QMenu *m_trayMenu;
+    bool m_canClose;  // 是否允许关闭窗口
 };
 
 #endif // MAINWINDOW_H

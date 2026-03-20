@@ -173,6 +173,8 @@ QString ScanThread::getDirectoryPurpose(const QString &path)
         return tr("🐧 QQ应用数据");
     if (dirName == "tim" || fullPath.contains("tim"))
         return tr("💼 TIM应用数据");
+    if (fullPath.contains("kingsoft") || fullPath.contains("wps"))
+        return tr("📝 WPS Office缓存");
     
     // 浏览器缓存
     if (dirName.contains("chrome") || fullPath.contains("google-chrome"))
@@ -186,7 +188,7 @@ QString ScanThread::getDirectoryPurpose(const QString &path)
     if (dirName.contains("falkon"))
         return tr("🌐 Falkon浏览器缓存");
     if (fullPath.contains("360.browser") || fullPath.contains("360browser"))
-        return tr("🔒 360浏览器缓存");
+        return tr("🌐 360浏览器缓存");
     if (fullPath.contains("loongnix.lbrowser") || fullPath.contains("lbrowser"))
         return tr("🐉 龙芯浏览器缓存");
     if (fullPath.contains("qqbrowser"))
@@ -1095,15 +1097,20 @@ void AnalyzeWidget::createInfoPage()
     layout->setAlignment(Qt::AlignCenter);
     layout->setSpacing(20);
 
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString titleColor = darkMode ? "#e0e0e0" : "#2c3e50";
+    QString descColor = darkMode ? "#a0a0a0" : "#7f8c8d";
+
     // 标题
     QLabel *titleLabel = new QLabel(tr("磁盘分析"), this);
-    titleLabel->setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50;");
+    titleLabel->setStyleSheet(QString("font-size: 24px; font-weight: bold; color: %1;").arg(titleColor));
     titleLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(titleLabel);
 
     // 说明文字
     QLabel *descLabel = new QLabel(tr("扫描系统中的可清理项目，包括缓存、日志、临时文件等"), this);
-    descLabel->setStyleSheet("font-size: 14px; color: #7f8c8d;");
+    descLabel->setStyleSheet(QString("font-size: 14px; color: %1;").arg(descColor));
     descLabel->setAlignment(Qt::AlignCenter);
     descLabel->setWordWrap(true);
     layout->addWidget(descLabel);
@@ -1130,12 +1137,16 @@ void AnalyzeWidget::createInfoPage()
         {tr("磐石快照"), "📸", tr("系统快照备份")}
     };
 
+    // 根据主题设置颜色
+    QString cardBgColor = darkMode ? "#3d3d3d" : "#ecf0f1";
+    QString nameColor = darkMode ? "#ffffff" : "#2c3e50";
+    
     int row = 0, col = 0;
     for (const CategoryInfo &cat : categories) {
         QFrame *frame = new QFrame(this);
         frame->setStyleSheet(
             "QFrame {"
-            "   background-color: #ecf0f1;"
+            "   background-color: " + cardBgColor + ";"
             "   border-radius: 8px;"
             "   padding: 10px;"
             "}"
@@ -1153,12 +1164,12 @@ void AnalyzeWidget::createInfoPage()
         frameLayout->addWidget(iconLabel);
 
         QLabel *nameLabel = new QLabel(cat.name, frame);
-        nameLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;");
+        nameLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: " + nameColor + ";");
         nameLabel->setAlignment(Qt::AlignCenter);
         frameLayout->addWidget(nameLabel);
 
         QLabel *descLabel = new QLabel(cat.desc, frame);
-        descLabel->setStyleSheet("font-size: 11px; color: #7f8c8d;");
+        descLabel->setStyleSheet("font-size: 11px; color: " + descColor + ";");
         descLabel->setAlignment(Qt::AlignCenter);
         descLabel->setWordWrap(true);
         frameLayout->addWidget(descLabel);
@@ -1207,9 +1218,15 @@ void AnalyzeWidget::createProgressPage()
     layout->setAlignment(Qt::AlignCenter);
     layout->setSpacing(20);
 
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString textColor = darkMode ? "#e0e0e0" : "#2c3e50";
+    QString borderColor = darkMode ? "#555555" : "#bdc3c7";
+    QString bgColor = darkMode ? "#3d3d3d" : "#ecf0f1";
+
     // 进度标签
     m_progressLabel = new QLabel(tr("正在扫描..."), this);
-    m_progressLabel->setStyleSheet("font-size: 18px; color: #2c3e50;");
+    m_progressLabel->setStyleSheet(QString("font-size: 18px; color: %1;").arg(textColor));
     m_progressLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_progressLabel);
 
@@ -1219,10 +1236,11 @@ void AnalyzeWidget::createProgressPage()
     m_progressBar->setMinimumHeight(25);
     m_progressBar->setStyleSheet(
         "QProgressBar {"
-        "   border: 2px solid #bdc3c7;"
+        "   border: 2px solid " + borderColor + ";"
         "   border-radius: 5px;"
         "   text-align: center;"
-        "   background-color: #ecf0f1;"
+        "   background-color: " + bgColor + ";"
+        "   color: " + textColor + ";"
         "}"
         "QProgressBar::chunk {"
         "   background-color: #3498db;"
@@ -1261,11 +1279,15 @@ void AnalyzeWidget::createResultPage()
     layout->setContentsMargins(10, 10, 10, 10);
     layout->setSpacing(10);
 
+    // 检测深色主题
+    bool darkMode = isDarkTheme();
+    QString titleColor = darkMode ? "#e0e0e0" : "#2c3e50";
+
     // 标题栏
     QHBoxLayout *headerLayout = new QHBoxLayout();
     
     QLabel *titleLabel = new QLabel(tr("扫描结果"), this);
-    titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50;");
+    titleLabel->setStyleSheet(QString("font-size: 18px; font-weight: bold; color: %1;").arg(titleColor));
     headerLayout->addWidget(titleLabel);
 
     m_totalSizeLabel = new QLabel(tr("总计: 0 B"), this);

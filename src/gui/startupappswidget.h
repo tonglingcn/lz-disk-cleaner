@@ -39,6 +39,7 @@ signals:
     void statusChanged();
     void deleteRequested();
     void editRequested();
+    void historyChanged();
 
 private slots:
     void onCheckBoxToggled(bool checked);
@@ -92,6 +93,9 @@ class StartupAppsWidget : public QWidget {
 public:
     explicit StartupAppsWidget(QWidget *parent = nullptr);
     ~StartupAppsWidget();
+
+signals:
+    void historyChanged();
 
 public slots:
     void refreshList();

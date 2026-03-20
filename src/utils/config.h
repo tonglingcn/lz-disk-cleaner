@@ -78,6 +78,9 @@ public:
     void load();
     void reset();
     
+    // 获取 QSettings 对象（供其他模块使用）
+    QSettings* getSettings() { return m_settings; }
+    
 private:
     explicit Config(QObject *parent = nullptr);
     ~Config();

@@ -13,5 +13,8 @@
         <file>icons/motherboard.svg</file>
         <file>icons/gpu.svg</file>
         <file>icons/hdd.svg</file>
+        <!-- Sponsor QR Codes -->
+        <file>sponsor/alipay.png</file>
+        <file>sponsor/wechat.png</file>
     </qresource>
 </RCC>

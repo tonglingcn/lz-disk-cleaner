@@ -48,6 +48,9 @@ public:
     explicit FileShredderWidget(QWidget *parent = nullptr);
     ~FileShredderWidget();
 
+signals:
+    void historyChanged();
+
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;

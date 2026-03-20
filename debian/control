@@ -24,10 +24,11 @@ Package: lz-disk-cleaner
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         policykit-1,
+         polkitd | policykit-1,
          psmisc,
          lsof
-Recommends: fonts-noto-color-emoji
+Recommends: fonts-noto-color-emoji,
+            lm-sensors
 Description: Disk cleaning and optimization tool for Deepin
  LZ Disk Cleaner is a comprehensive disk cleaning and system
  optimization tool designed for Deepin V25.
