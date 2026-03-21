@@ -1,0 +1,20 @@
+<RCC>
+    <qresource prefix="/">
+        <!-- Icons (SVG) -->
+        <file>icons/app_icon.svg</file>
+        <file>icons/dashboard.svg</file>
+        <file>icons/analyze.svg</file>
+        <file>icons/cleanup.svg</file>
+        <file>icons/settings.svg</file>
+        <file>icons/about.svg</file>
+        <file>icons/check.svg</file>
+        <!-- Hardware Temperature Icons -->
+        <file>icons/cpu.svg</file>
+        <file>icons/motherboard.svg</file>
+        <file>icons/gpu.svg</file>
+        <file>icons/hdd.svg</file>
+        <!-- Sponsor QR Codes -->
+        <file>sponsor/alipay.png</file>
+        <file>sponsor/wechat.png</file>
+    </qresource>
+</RCC>

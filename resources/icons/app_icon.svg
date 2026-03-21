@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <!-- 磁盘渐变 -->
+    <linearGradient id="diskGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5c6bc0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3f51b5;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- 垃圾桶渐变 -->
+    <linearGradient id="trashGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ef5350;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c62828;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- 清理渐变 -->
+    <linearGradient id="cleanGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#66bb6a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#43a047;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 磁盘主体 - 左侧 -->
+  <g transform="translate(6, 12)">
+    <!-- 磁盘外框 -->
+    <rect x="0" y="0" width="28" height="36" rx="3" ry="3" fill="url(#diskGradient)" stroke="#283593" stroke-width="2"/>
+    
+    <!-- 磁盘标签区域 -->
+    <rect x="3" y="3" width="22" height="8" rx="1" ry="1" fill="#7986cb"/>
+    
+    <!-- 磁盘中心孔 -->
+    <circle cx="14" cy="20" r="6" fill="#1a237e" stroke="#5c6bc0" stroke-width="1.5"/>
+    
+    <!-- 磁盘轨道线 -->
+    <circle cx="14" cy="20" r="3" fill="none" stroke="#9fa8da" stroke-width="1" opacity="0.6"/>
+    <circle cx="14" cy="20" r="9" fill="none" stroke="#9fa8da" stroke-width="1" opacity="0.4"/>
+    
+    <!-- 垃圾文件图标（表示需要清理的文件） -->
+    <rect x="6" y="28" width="4" height="5" rx="0.5" fill="#ffcdd2" stroke="#ef5350" stroke-width="0.5"/>
+    <rect x="12" y="28" width="4" height="5" rx="0.5" fill="#ffcdd2" stroke="#ef5350" stroke-width="0.5"/>
+    <rect x="18" y="28" width="4" height="5" rx="0.5" fill="#ffcdd2" stroke="#ef5350" stroke-width="0.5"/>
+  </g>
+  
+  <!-- 箭头 - 表示清理动作 -->
+  <g transform="translate(38, 30)">
+    <!-- 箭头主体 -->
+    <path d="M0,0 L12,0 L12,-3 L18,3 L12,9 L12,6 L0,6 Z" fill="url(#cleanGradient)" stroke="#2e7d32" stroke-width="1"/>
+    <!-- 箭头高光 -->
+    <path d="M2,1 L10,1 L10,-1 L14,3 L10,7" fill="none" stroke="#a5d6a7" stroke-width="1" opacity="0.5"/>
+  </g>
+  
+  <!-- 垃圾桶 - 右侧（清理目标） -->
+  <g transform="translate(44, 8)">
+    <!-- 垃圾桶盖子 -->
+    <rect x="2" y="0" width="12" height="3" rx="1" fill="#b71c1c"/>
+    <rect x="5" y="-2" width="6" height="2" rx="0.5" fill="#c62828"/>
+    
+    <!-- 垃圾桶主体 -->
+    <path d="M3,3 L4,24 L12,24 L13,3 Z" fill="url(#trashGradient)" stroke="#b71c1c" stroke-width="1"/>
+    
+    <!-- 垃圾桶纹理线 -->
+    <line x1="5" y1="6" x2="5" y2="21" stroke="#ffcdd2" stroke-width="1" opacity="0.3"/>
+    <line x1="8" y1="6" x2="8" y2="21" stroke="#ffcdd2" stroke-width="1" opacity="0.3"/>
+    <line x1="11" y1="6" x2="11" y2="21" stroke="#ffcdd2" stroke-width="1" opacity="0.3"/>
+  </g>
+  
+  <!-- 清理效果指示（闪光） -->
+  <g fill="#ffeb3b">
+    <polygon points="54,4 56,8 60,8 57,11 58,15 54,13 50,15 51,11 48,8 52,8" transform="scale(0.6) translate(30, 5)"/>
+  </g>
+  
+  <!-- 底部阴影 -->
+  <ellipse cx="32" cy="52" rx="28" ry="2" fill="#000" opacity="0.15"/>
+</svg>

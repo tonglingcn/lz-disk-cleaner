@@ -1,0 +1,61 @@
+Source: lz-disk-cleaner
+Section: utils
+Priority: optional
+Maintainer: 克亮 <315707022@qq.com>
+Build-Depends: cmake (>= 3.16),
+               debhelper-compat (= 13),
+               qt6-base-dev (>= 6.2),
+               qt6-base-dev-tools (>= 6.2),
+               qt6-svg-dev (>= 6.2),
+               qt6-tools-dev (>= 6.2),
+               qt6-l10n-tools (>= 6.2),
+               libqt6core6 (>= 6.2),
+               libqt6gui6 (>= 6.2),
+               libqt6widgets6 (>= 6.2),
+               libqt6network6 (>= 6.2),
+               libqt6svg6 (>= 6.2),
+               libgl1-mesa-dev | libgl-dev,
+               libegl1-mesa-dev | libegl-dev,
+               pkg-config,
+               g++ (>= 4:12)
+Standards-Version: 4.6.2
+Homepage: https://github.com/tonglingcn/deepin-disk-cleaner
+Vcs-Git: https://github.com/tonglingcn/deepin-disk-cleaner.git
+Vcs-Browser: https://github.com/tonglingcn/deepin-disk-cleaner
+
+Package: lz-disk-cleaner
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         polkitd | policykit-1,
+         psmisc,
+         lsof
+Recommends: fonts-noto-color-emoji,
+            lm-sensors
+Description: Disk cleaning and optimization tool for Deepin
+ LZ Disk Cleaner is a comprehensive disk cleaning and system
+ optimization tool designed for Deepin V25.
+ .
+ Main Features:
+  - Disk usage analysis with multi-level directory scanning
+  - Smart and custom cleanup modes
+  - APT source management (add, edit, enable/disable, delete)
+  - Startup application management
+  - File shredder with secure deletion
+  - System slimming (large files, duplicates finder)
+  - Hardware resource monitoring (CPU, Memory, Network, GPU)
+  - Linglong application management
+  - Immutable system (磐石) snapshot support
+  - Support for multiple browsers cache cleaning
+ .
+ This tool helps users reclaim disk space and maintain system
+ performance with an intuitive Qt6-based interface.
+
+Package: lz-disk-cleaner-dbg
+Architecture: any
+Section: debug
+Depends: lz-disk-cleaner (= ${binary:Version}),
+         ${misc:Depends}
+Description: Debug symbols for lz-disk-cleaner
+ This package contains the debug symbols for lz-disk-cleaner,
+ useful for debugging and development purposes.

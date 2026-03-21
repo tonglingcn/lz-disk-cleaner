@@ -1,0 +1,43 @@
+lz-disk-cleaner for Debian/Deepin
+---------------------------------
+
+This package contains the LZ Disk Cleaner application,
+a comprehensive disk cleaning and system optimization tool
+specifically designed for Deepin V25.
+
+Building from source:
+--------------------
+apt build-dep lz-disk-cleaner
+dpkg-buildpackage -us -uc
+
+Or using debuild:
+debuild -us -uc
+
+Or using the provided script:
+./build.sh
+
+Required runtime dependencies:
+-----------------------------
+- policykit-1: For privilege escalation
+- psmisc: For process management
+- lsof: For checking file locks
+Configuration files:
+------------------
+User configuration is stored in:
+~/.config/lz-disk-cleaner/
+
+Log files are stored in:
+~/.local/share/lz-disk-cleaner/
+
+Features:
+---------
+- Disk usage analysis with multi-level directory scanning
+- Smart and custom cleanup modes
+- APT source management
+- Startup application management
+- File shredder with secure deletion
+- Hardware resource monitoring
+- Linglong application management
+- Immutable system snapshot support
+
+ -- LZ Disk Cleaner Team <support@lz-disk-cleaner.org>  Mon, 16 Mar 2026

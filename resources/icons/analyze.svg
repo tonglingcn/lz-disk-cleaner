@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="pieGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ee5a5a;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="pieGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4ecdc4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3dbdb5;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="pieGradient3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffe66d;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ffd93d;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="pieGradient4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#95e1d3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7dd3c5;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 放大镜框 -->
+  <circle cx="28" cy="28" r="18" fill="none" stroke="#4a90d9" stroke-width="3"/>
+  <circle cx="28" cy="28" r="14" fill="rgba(74, 144, 217, 0.1)"/>
+  
+  <!-- 放大镜柄 -->
+  <line x1="42" y1="42" x2="54" y2="54" stroke="#4a90d9" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- 饼图分析（在放大镜内） -->
+  <g transform="translate(28, 28) scale(0.6)">
+    <!-- 第一块：40% -->
+    <path d="M0,0 L0,-15 A15,15 0 0,1 14.1,-4.6 Z" fill="url(#pieGradient1)"/>
+    <!-- 第二块：25% -->
+    <path d="M0,0 L14.1,-4.6 A15,15 0 0,1 8.8,12.1 Z" fill="url(#pieGradient2)"/>
+    <!-- 第三块：20% -->
+    <path d="M0,0 L8.8,12.1 A15,15 0 0,1 -8.8,12.1 Z" fill="url(#pieGradient3)"/>
+    <!-- 第四块：15% -->
+    <path d="M0,0 L-8.8,12.1 A15,15 0 0,1 0,-15 Z" fill="url(#pieGradient4)"/>
+  </g>
+  
+  <!-- 分析指示点 -->
+  <circle cx="52" cy="12" r="3" fill="#ff6b6b">
+    <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="56" cy="18" r="2" fill="#4ecdc4">
+    <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="50" cy="20" r="2" fill="#ffe66d">
+    <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite" begin="0.5s"/>
+  </circle>
+  
+  <!-- 底部阴影 -->
+  <ellipse cx="32" cy="58" rx="18" ry="2" fill="#000" opacity="0.2"/>
+</svg>

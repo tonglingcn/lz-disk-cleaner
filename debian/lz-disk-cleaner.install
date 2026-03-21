@@ -1,0 +1,3 @@
+usr/bin/lz-disk-cleaner
+usr/bin/lz-disk-cleaner-helper
+usr/share/polkit-1/actions/com.deepin.pkexec.disk-cleaner.policy
