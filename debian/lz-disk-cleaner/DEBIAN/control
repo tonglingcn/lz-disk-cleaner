@@ -1,0 +1,28 @@
+Package: lz-disk-cleaner
+Version: 1.2.0-1
+Architecture: amd64
+Maintainer: 克亮 <315707022@qq.com>
+Installed-Size: 1531
+Depends: libc6 (>= 2.34), libgcc-s1 (>= 3.0), libqt6core6 (>= 6.8.0), libqt6gui6 (>= 6.4.0), libqt6network6 (>= 6.2), libqt6svgwidgets6 (>= 6.8.0), libqt6widgets6 (>= 6.8.0), libstdc++6 (>= 5.2), libx11-6, polkitd | policykit-1, psmisc, lsof
+Recommends: fonts-noto-color-emoji, lm-sensors
+Section: utils
+Priority: optional
+Homepage: https://github.com/tonglingcn/lz-disk-cleaner
+Description: Disk cleaning and optimization tool for Deepin
+ LZ Disk Cleaner is a comprehensive disk cleaning and system
+ optimization tool designed for Deepin V25.
+ .
+ Main Features:
+  - Disk usage analysis with multi-level directory scanning
+  - Smart and custom cleanup modes
+  - APT source management (add, edit, enable/disable, delete)
+  - Startup application management
+  - File shredder with secure deletion
+  - System slimming (large files, duplicates finder)
+  - Hardware resource monitoring (CPU, Memory, Network, GPU)
+  - Linglong application management
+  - Immutable system (磐石) snapshot support
+  - Support for multiple browsers cache cleaning
+ .
+ This tool helps users reclaim disk space and maintain system
+ performance with an intuitive Qt6-based interface.

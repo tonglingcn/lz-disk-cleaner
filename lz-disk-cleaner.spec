@@ -13,7 +13,7 @@
 # published by the Open Source Initiative.
 
 Name:           lz-disk-cleaner
-Version:        1.3.0
+Version:        1.2.0
 Release:        1
 Summary:        Disk cleaning and optimization tool for Linux
 
@@ -88,13 +88,13 @@ install -Dm644 src/helper/com.deepin.pkexec.disk-cleaner.policy \
 %{_datadir}/polkit-1/actions/com.deepin.pkexec.disk-cleaner.policy
 
 %changelog
-* Sat Apr 12 2026 克亮 <315707022@qq.com> - 1.3.0-1
+* Sat Apr 12 2026 克亮 <315707022@qq.com> - 1.2.0-1
 - Add built-in whitelist protection in helper for log cleanup
 - Fix /persistent partition scanning (du timeout and threshold)
 - Fix unknown size display in scan results
-- Sync version to 1.3.0
+- Sync version to 1.2.0
 
-* Wed Mar 19 2026 克亮 <315707022@qq.com> - 1.2.0-1
+* Wed Mar 19 2026 克亮 <315707022@qq.com> - 1.1.1-1
 - New features: hardware monitoring, APT source management, startup apps
 - Add distro-adaptive title support
 - Add dark theme support

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(lz-disk-cleaner VERSION 1.3.0 LANGUAGES CXX)
+project(lz-disk-cleaner VERSION 1.2.0 LANGUAGES CXX)
 
 # C++ 标准
 set(CMAKE_CXX_STANDARD 17)

@@ -26,7 +26,8 @@ if ! command -v fakeroot &> /dev/null; then
     MISSING_TOOLS="$MISSING_TOOLS fakeroot"
 fi
 
-if ! command -v debhelper &> /dev/null; then
+# 检测debhelper（通过dh命令检测，因为debhelper包不提供debhelper二进制）
+if ! command -v dh_auto_configure &> /dev/null; then
     MISSING_TOOLS="$MISSING_TOOLS debhelper"
 fi
 
