@@ -1,0 +1,75 @@
+# 该入门工作流程适用于在多个平台上运行的 CMake 项目。如果您只需要一个平台的工作流程，请使用不同的入门工作流程。
+# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
+名称：在多个平台上使用 CMake: CMake on multiple platforms
+
+在::
+  推送::
+    分支: [ "main" ]: [ "main" ]
+  拉取请求::
+    分支: [ "main" ]: [ "main" ]
+
+职位::
+  构建::
+    运行于: ${{ matrix.os }}: ${{ matrix.os }}
+
+    战略：:
+      # 将 fail-fast 设置为 false 以确保为所有矩阵组合提供反馈。在您的工作流程稳定时，考虑将其更改为 true。# Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
+      快速失败：否: false
+
+      # 设置一个矩阵来运行以下3种配置：# Set up a matrix to run the following 3 configurations:
+      # 1. # 1. <Windows, Release, latest MSVC compiler toolchain on the default runner image, default generator>
+      # 2. # 2. <Linux, Release, latest GCC compiler toolchain on the default runner image, default generator>
+      # 3. # 3. <Linux, Release, latest Clang compiler toolchain on the default runner image, default generator>
+      ##
+      # 要添加更多的构建类型（发布版、调试版、带调试信息的发布版等），请自定义 build_type 列表。# To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
+      矩阵::
+        操作系统: [ubuntu-latest, windows-latest]: [ubuntu-latest, windows-latest]
+        构建类型: [发布版]: [Release]
+        c 编译器: [gcc, clang, cl]: [gcc, clang, cl]
+        包括：:
+          - 操作系统: Windows-latestos: windows-latest
+            c 编译器: cl: cl
+            cpp_compiler: cl: cl
+          - 操作系统: ubuntu-latestos: ubuntu-latest
+            c 编译器: gcc: gcc
+            cpp_compiler: g++: g++
+          - 操作系统: ubuntu-latestos: ubuntu-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+        exclude:
+          - os: windows-latest
+            c_compiler: gcc
+          - os: windows-latest
+            c_compiler: clang
+          - os: ubuntu-latest
+            c_compiler: cl
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set reusable strings
+      # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
+      id: strings
+      shell: bash
+      run: |
+        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+
+    - name: Configure CMake
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: >
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+# 参见: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -S ${{ github.workspace }}
+
+    - name: Build
+      # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+    - name: Test
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      # Execute tests defined by the CMake configuration. Note that --build-config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
+      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+      run: ctest --build-config ${{ matrix.build_type }}
