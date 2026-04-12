@@ -76,6 +76,7 @@ private:
     // UI 组件
     QLabel *m_titleLabel;
     QLabel *m_dropAreaLabel;
+    QFrame *m_dropHintFrame;        // 列表内空状态拖放提示框
     QListWidget *m_fileList;
     QPushButton *m_addFilesBtn;
     QPushButton *m_addFolderBtn;

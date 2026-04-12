@@ -123,49 +123,6 @@ void FileShredderWidget::initUI()
 
     mainLayout->addWidget(headerCard);
 
-    // ========== 拖放区域（紧凑布局）==========
-    QFrame *dropCard = new QFrame(this);
-    dropCard->setObjectName("dropCard");
-    dropCard->setMaximumHeight(80);
-    dropCard->setStyleSheet(
-        QString("QFrame#dropCard { "
-        "   background-color: %1; "
-        "   border: 2px dashed %2; "
-        "   border-radius: 8px; "
-        "}"
-        "QFrame#dropCard:hover { "
-        "   border-color: #0081FF; "
-        "   background-color: %3; "
-        "}").arg(dropCardBg, dropCardBorder, dropCardHoverBg)
-    );
-
-    QHBoxLayout *dropLayout = new QHBoxLayout(dropCard);
-    dropLayout->setAlignment(Qt::AlignCenter);
-    dropLayout->setSpacing(10);
-    dropLayout->setContentsMargins(10, 5, 10, 5);
-
-    // 拖放图标
-    QLabel *dropIcon = new QLabel("📁", this);
-    dropIcon->setStyleSheet("font-size: 28px; background: transparent;");
-    dropLayout->addWidget(dropIcon);
-
-    // 拖放提示文字
-    QVBoxLayout *dropTextLayout = new QVBoxLayout();
-    dropTextLayout->setSpacing(2);
-    dropTextLayout->setContentsMargins(0, 0, 0, 0);
-
-    m_dropAreaLabel = new QLabel(tr("拖拽文件或文件夹到此处"), dropCard);
-    m_dropAreaLabel->setStyleSheet(QString("font-size: 14px; color: %1; font-weight: 500; background: transparent;").arg(dropAreaTextColor));
-    dropTextLayout->addWidget(m_dropAreaLabel);
-
-    QLabel *dropHint = new QLabel(tr("或点击下方按钮添加"), dropCard);
-    dropHint->setObjectName("dropHint");
-    dropHint->setStyleSheet(QString("font-size: 11px; color: %1; background: transparent;").arg(dropHintTextColor));
-    dropTextLayout->addWidget(dropHint);
-
-    dropLayout->addLayout(dropTextLayout);
-    mainLayout->addWidget(dropCard);
-
     // ========== 操作按钮区域（紧凑版）==========
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->setSpacing(8);
@@ -295,6 +252,45 @@ void FileShredderWidget::initUI()
     listHeaderLayout->addWidget(m_totalSizeLabel);
     listCardLayout->addLayout(listHeaderLayout);
     
+    // ========== 空状态拖放提示框（覆盖在列表上方）==========
+    m_dropHintFrame = new QFrame(this);
+    m_dropHintFrame->setObjectName("dropHintFrame");
+    m_dropHintFrame->setStyleSheet(
+        QString("QFrame#dropHintFrame { "
+        "   background-color: %1; "
+        "   border: 2px dashed %2; "
+        "   border-radius: 10px; "
+        "}"
+        "QFrame#dropHintFrame:hover { "
+        "   border-color: #0081FF; "
+        "   background-color: %3; "
+        "}").arg(dropCardBg, dropCardBorder, dropCardHoverBg)
+    );
+    
+    QHBoxLayout *hintLayout = new QHBoxLayout(m_dropHintFrame);
+    hintLayout->setAlignment(Qt::AlignCenter);
+    hintLayout->setSpacing(12);
+    hintLayout->setContentsMargins(20, 30, 20, 30);
+
+    QLabel *dropIcon = new QLabel("📁", this);
+    dropIcon->setStyleSheet("font-size: 36px; background: transparent;");
+    hintLayout->addWidget(dropIcon);
+
+    QVBoxLayout *dropTextLayout = new QVBoxLayout();
+    dropTextLayout->setSpacing(4);
+    dropTextLayout->setContentsMargins(0, 0, 0, 0);
+
+    m_dropAreaLabel = new QLabel(tr("拖拽文件或文件夹到此处"), this);
+    m_dropAreaLabel->setStyleSheet(QString("font-size: 16px; color: %1; font-weight: bold; background: transparent;").arg(dropAreaTextColor));
+    dropTextLayout->addWidget(m_dropAreaLabel);
+
+    QLabel *dropSubHint = new QLabel(tr("或点击下方按钮添加文件"), this);
+    dropSubHint->setStyleSheet(QString("font-size: 12px; color: %1; background: transparent;").arg(dropHintTextColor));
+    dropTextLayout->addWidget(dropSubHint);
+
+    hintLayout->addLayout(dropTextLayout);
+    listCardLayout->addWidget(m_dropHintFrame, 1);
+    
     // 深色主题列表样式
     QString listItemBg = darkMode ? "#4a4a4a" : "#F8F9FA";
     QString listItemHover = darkMode ? "#5a5a5a" : "#EBF5FB";
@@ -304,13 +300,14 @@ void FileShredderWidget::initUI()
     QString listScrollHandle = darkMode ? "#666666" : "#BDC3C7";
     QString listScrollHandleHover = darkMode ? "#888888" : "#95A5A6";
     
-    // 文件列表 - 占据更多空间
+    // 文件列表 - 占据更多空间，初始隐藏
     m_fileList = new QListWidget(this);
     m_fileList->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_fileList->setMinimumHeight(200);
     m_fileList->setFrameStyle(QFrame::NoFrame);
     m_fileList->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_fileList->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_fileList->setVisible(false);  // 初始隐藏，有文件时显示
     m_fileList->setStyleSheet(
         QString("QListWidget { "
         "   background-color: transparent; "
@@ -527,7 +524,16 @@ void FileShredderWidget::dragEnterEvent(QDragEnterEvent *event)
     if (event->mimeData()->hasUrls()) {
         event->acceptProposedAction();
         m_dropAreaLabel->setText(tr("📂 释放鼠标添加文件"));
-        m_dropAreaLabel->setStyleSheet("font-size: 16px; color: #27ae60; font-weight: bold;");
+        bool darkMode = isDarkTheme();
+        m_dropAreaLabel->setStyleSheet(QString("font-size: 16px; color: #27ae60; font-weight: bold; background: transparent;"));
+        // 高亮拖放框边框
+        m_dropHintFrame->setStyleSheet(
+            QString("QFrame#dropHintFrame { "
+            "   background-color: %1; "
+            "   border: 2px dashed #27ae60; "
+            "   border-radius: 10px; "
+            "}").arg(darkMode ? "#1a3a4a" : "#E8F8E5")
+        );
     }
 }
 
@@ -538,8 +544,21 @@ void FileShredderWidget::dragMoveEvent(QDragMoveEvent *event)
 
 void FileShredderWidget::dropEvent(QDropEvent *event)
 {
-    m_dropAreaLabel->setText(tr("📂 拖拽文件或文件夹到此处"));
-    m_dropAreaLabel->setStyleSheet("font-size: 16px; color: #666;");
+    // 恢复原始拖放框样式
+    bool darkMode = isDarkTheme();
+    QString dropCardBg = darkMode ? "#3d3d3d" : "#F8F9FA";
+    QString dropCardBorder = darkMode ? "#555555" : "#BDC3C7";
+    QString dropAreaTextColor = darkMode ? "#e0e0e0" : "#5D6D7E";
+    
+    m_dropAreaLabel->setText(tr("拖拽文件或文件夹到此处"));
+    m_dropAreaLabel->setStyleSheet(QString("font-size: 16px; color: %1; font-weight: bold; background: transparent;").arg(dropAreaTextColor));
+    m_dropHintFrame->setStyleSheet(
+        QString("QFrame#dropHintFrame { "
+        "   background-color: %1; "
+        "   border: 2px dashed %2; "
+        "   border-radius: 10px; "
+        "}").arg(dropCardBg, dropCardBorder)
+    );
 
     QList<QUrl> urls = event->mimeData()->urls();
     QStringList files;
@@ -666,6 +685,11 @@ void FileShredderWidget::updateTotalSize()
     m_totalSizeLabel->setText(tr("总大小: %1 (%2 个项目)")
         .arg(formatSize(m_totalSize))
         .arg(m_fileList->count()));
+    
+    // 根据列表是否为空切换显示
+    bool hasItems = m_fileList->count() > 0;
+    m_dropHintFrame->setVisible(!hasItems);
+    m_fileList->setVisible(hasItems);
 }
 
 void FileShredderWidget::onShredClicked()
@@ -774,6 +798,9 @@ void FileShredderWidget::onShredFinished(const QList<ShredResult> &results)
     QStringList failedFiles;
     QStringList successFiles;
 
+    // 在移除文件前保存当前总大小
+    qint64 freedSize = m_totalSize;
+
     for (const ShredResult &result : results) {
         if (result.success) {
             successCount++;
@@ -797,7 +824,7 @@ void FileShredderWidget::onShredFinished(const QList<ShredResult> &results)
     
     // 记录清理历史
     if (successCount > 0 || failCount > 0) {
-        CleanupHistoryWidget::addHistory(tr("文件粉碎"), 0, successCount, failCount, successFiles);
+        CleanupHistoryWidget::addHistory(tr("文件粉碎"), freedSize, successCount, failCount, successFiles);
         emit historyChanged();
     }
 

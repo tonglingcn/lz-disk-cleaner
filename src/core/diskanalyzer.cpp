@@ -124,8 +124,74 @@ ImmutableSystemInfo DiskAnalyzer::analyzeImmutableSystem()
     // 获取部署信息 (需要 root 权限，可能失败)
     m_process->start("deepin-immutable-ctl", QStringList() << "admin" << "status" << "-d" << "all");
     if (m_process->waitForFinished(5000)) {
-        info.deploymentInfo = QString::fromUtf8(m_process->readAllStandardOutput());
-        LOG_DEBUG(QString("Deployment info: %1").arg(info.deploymentInfo.left(200)));
+        QString rawOutput = QString::fromUtf8(m_process->readAllStandardOutput());
+        info.deploymentInfo = rawOutput;
+        LOG_DEBUG(QString("Deployment info (raw): %1").arg(rawOutput.left(500)));
+        
+        // 尝试 JSON 解析（新版本输出格式）
+        // 输出格式示例: {"deployments":[{"id":"0","version":"...","booted":true},...]}
+        QRegularExpression jsonDeployRe(R"(\{[^{}]*"deployments"\s*:\s*\[([^\]]*)\])");
+        QRegularExpressionMatch jsonMatch = jsonDeployRe.match(rawOutput);
+        
+        if (jsonMatch.hasMatch()) {
+            QString deploymentsStr = jsonMatch.captured(1);
+            // 解析每个 deployment 对象
+            QRegularExpression itemRe(R"(\{([^}]*)\})");
+            auto iter = itemRe.globalMatch(deploymentsStr);
+            int deployIndex = 0;
+            while (iter.hasNext()) {
+                QRegularExpressionMatch itemMatch = iter.next();
+                QString itemStr = itemMatch.captured(1);
+                
+                DeploymentInfo depInfo;
+                depInfo.index = deployIndex++;
+                
+                // 提取 id
+                QRegularExpression idRe(R"XXX("id"\s*:\s*"([^"]+)")XXX");
+                QRegularExpressionMatch idM = idRe.match(itemStr);
+                if (idM.hasMatch()) depInfo.id = idM.captured(1).trimmed();
+
+                // 提取 version
+                QRegularExpression verRe(R"XXX("version"\s*:\s*"([^"]+)")XXX");
+                QRegularExpressionMatch verM = verRe.match(itemStr);
+                if (verM.hasMatch()) depInfo.version = verM.captured(1).trimmed();
+                
+                // 提取 booted
+                QRegularExpression bootRe(R"XXX("booted"\s*:\s*(true|false))XXX");
+                QRegularExpressionMatch bootM = bootRe.match(itemStr);
+                if (bootM.hasMatch()) depInfo.booted = (bootM.captured(1) == "true");
+
+                // 提取 timestamp
+                QRegularExpression tsRe(R"XXX("timestamp"\s*:\s*(\d+))XXX");
+                QRegularExpressionMatch tsM = tsRe.match(itemStr);
+                if (tsM.hasMatch()) depInfo.timestamp = tsM.captured(1).trimmed();
+                
+                info.deployments.append(depInfo);
+            }
+            LOG_INFO(QString("Parsed %1 deployments").arg(info.deployments.size()));
+        } else {
+            // 旧版文本格式解析：尝试匹配 "deploy-0"、"deploy-1" 等
+            QRegularExpression textDeployRe(R"(deploy-(\d+)[^0-9])");
+            auto textIter = textDeployRe.globalMatch(rawOutput);
+            int maxIdx = -1;
+            while (textIter.hasNext()) {
+                QRegularExpressionMatch m = textIter.next();
+                int idx = m.captured(1).toInt();
+                if (idx > maxIdx) maxIdx = idx;
+            }
+            
+            if (maxIdx >= 0) {
+                for (int i = 0; i <= maxIdx; ++i) {
+                    DeploymentInfo depInfo;
+                    depInfo.index = i;
+                    depInfo.id = QString("deploy-%1").arg(i);
+                    depInfo.booted = (i == maxIdx);  // 假设最后一个为当前使用
+                    depInfo.version = tr("未知版本");
+                    info.deployments.append(depInfo);
+                }
+                LOG_INFO(QString("Text mode: detected %1 deployments (0-%2)").arg(maxIdx+1).arg(maxIdx));
+            }
+        }
     }
     
     // 获取修改层信息

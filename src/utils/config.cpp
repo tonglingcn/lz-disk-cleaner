@@ -126,6 +126,16 @@ void Config::setRefreshInterval(int seconds)
     m_settings->setValue("Interface/refreshInterval", seconds);
 }
 
+int Config::getCloseAction() const
+{
+    return m_settings->value("Behavior/closeAction", 0).toInt();
+}
+
+void Config::setCloseAction(int action)
+{
+    m_settings->setValue("Behavior/closeAction", action);
+}
+
 // 白名单设置 - 保留空目录
 QStringList Config::getKeepEmptyDirWhitelist() const
 {

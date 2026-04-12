@@ -22,6 +22,15 @@ struct DiskUsage {
     QString mountpoint;
 };
 
+// 部署信息（用于 undeploy 删除旧版本）
+struct DeploymentInfo {
+    int index;                 // 部署编号（如 0, 1, 2）
+    QString id;                // 部署 ID（如 "deploy-0"）
+    QString version;           // 版本号（如 "os/deepin/25.0/x86_64"）
+    bool booted;               // 是否为当前正在使用的部署
+    QString timestamp;         // 部署时间戳
+};
+
 struct ImmutableSystemInfo {
     bool enabled;
     QString currentSnapshot;
@@ -30,6 +39,7 @@ struct ImmutableSystemInfo {
     QStringList snapshots;
     // 新增部署信息
     QString deploymentInfo;
+    QList<DeploymentInfo> deployments;  // 所有部署列表
     qint64 totalSnapshotSize;
     int snapshotCount;
     // 新增：各组件大小

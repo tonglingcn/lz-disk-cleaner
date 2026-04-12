@@ -47,6 +47,8 @@ struct ScanResult {
     QString description;  // 描述信息
     QString purpose;      // 目录用途（如"钉钉应用数据"）
     QList<ScanResult> children; // 子目录项（用于层级展示）
+    // 磐石部署专用字段
+    int deployIndex = -1; // 部署编号（>=0 表示这是一个部署项）
 };
 
 // 扫描线程

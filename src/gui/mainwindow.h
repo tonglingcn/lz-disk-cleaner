@@ -71,6 +71,7 @@ private slots:
 private:
     void initUI();
     QString formatSize(qint64 bytes);
+    qint64 parseSizeToBytes(const QString &sizeStr);
     void createMenuBar();
     void createToolBar();
     void createStatusBar();
@@ -78,6 +79,11 @@ private:
     void applyTheme();
     void performAnalyzeCleanup(const QList<ScanResult> &items);
     bool checkX11WindowState();
+    
+    // 白名单检查辅助函数
+    bool isPathInWhitelist(const QString &path, const QStringList &whitelist);
+    bool isFileMatchPattern(const QString &fileName, const QStringList &patterns);
+    bool cleanDirContent(const QString &dirPath);
     
     // UI 组件
     QTabWidget *m_tabWidget;

@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
     
     // 设置应用程序信息
     app.setApplicationName("LZ Disk Cleaner");
-    app.setApplicationVersion("1.1.2");
+    app.setApplicationVersion("1.3.0");
     app.setOrganizationName("LZ");
     app.setOrganizationDomain("github.com/tonglingcn");
     

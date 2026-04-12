@@ -105,43 +105,130 @@ bool cleanAptCache()
     return success;
 }
 
-// 清理系统日志（保留最近的）
-bool cleanSystemLogs(int keepDays = 7)
+// 检查路径是否在白名单中（精确匹配或前缀匹配）
+bool isPathInWhitelist(const QString &path, const QStringList &whitelist)
+{
+    for (const QString &wPath : whitelist) {
+        if (path == wPath || path.startsWith(wPath + "/")) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 获取系统内置的日志目录保护白名单（兜底保护，不依赖GUI传递）
+QStringList getBuiltinLogWhitelist()
+{
+    return QStringList()
+        << "/var/log/supervisor"
+        << "/var/log/nginx"
+        << "/var/log/apache2"
+        << "/var/log/mysql"
+        << "/var/log/postgresql"
+        << "/var/log/redis"
+        << "/var/log/mongodb"
+        << "/var/log/docker"
+        << "/var/log/apt"
+        << "/var/log/cups"
+        << "/var/log/samba"
+        << "/var/log/lightdm"
+        << "/var/log/gdm"
+        << "/var/log/Xorg"
+        << "/var/log/tomcat"
+        << "/var/log/elasticsearch"
+        << "/var/log/kafka"
+        << "/var/log/zookeeper";
+}
+
+// 清理系统日志（保留最近的，白名单目录只清内容不删目录）
+// keepEmptyDirs: 需要保留空目录的路径列表（系统级+用户级白名单合并）
+bool cleanSystemLogs(int keepDays, const QStringList &keepEmptyDirs)
 {
     QDir logDir("/var/log");
     if (!logDir.exists()) {
         return true;
     }
-    
-    QFileInfoList entries = logDir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
-    bool success = true;
+
+    // 合并GUI传递的白名单和内置兜底白名单，确保关键目录始终受保护
+    QStringList mergedWhitelist = keepEmptyDirs;
+    QStringList builtinList = getBuiltinLogWhitelist();
+    for (const QString &builtinPath : builtinList) {
+        if (!mergedWhitelist.contains(builtinPath)) {
+            mergedWhitelist.append(builtinPath);
+        }
+    }
+    std::cout << "[LOG_CLEAN] Merged whitelist size: " << mergedWhitelist.size()
+              << " (GUI: " << keepEmptyDirs.size() << ", builtin: " << builtinList.size() << ")" << std::endl;
+
     QDateTime cutoffDate = QDateTime::currentDateTime().addDays(-keepDays);
-    
-    for (const QFileInfo &entry : entries) {
-        QString fileName = entry.fileName();
-        // 保留关键日志文件
-        if (fileName == "wtmp" || fileName == "btmp" || fileName == "lastlog") {
+    bool success = true;
+
+    // === 第一阶段：处理子目录（应用白名单规则）===
+    QFileInfoList dirEntries = logDir.entryInfoList(
+        QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
+    for (const QFileInfo &entry : dirEntries) {
+        QString absPath = entry.absoluteFilePath();
+
+        // 跳过 journal 目录（它由 journalctl --vacuum-time 单独处理，不要直接操作）
+        if (entry.fileName() == "journal") {
+            std::cout << "Skipping journal directory (handled by journalctl)" << std::endl;
             continue;
         }
-        
-        // 根据修改时间判断是否删除
+
+        if (isPathInWhitelist(absPath, mergedWhitelist)) {
+            // 白名单目录：只清空内容，保留目录本身
+            std::cout << "[KeepEmpty] Clearing content of: " << absPath.toStdString() << std::endl;
+            if (!clearDirectoryContents(absPath)) {
+                std::cerr << "Failed to clear directory content: " << absPath.toStdString() << std::endl;
+                success = false;
+            } else {
+                std::cout << "[OK] Directory content cleared (dir kept): " << absPath.toStdString() << std::endl;
+            }
+        } else {
+            // 非白名单目录：递归删除整个目录
+            std::cout << "[Remove] Removing: " << absPath.toStdString() << std::endl;
+            if (!removeDirectory(absPath)) {
+                std::cerr << "Failed to remove directory: " << absPath.toStdString() << std::endl;
+                success = false;
+            } else {
+                std::cout << "[OK] Directory removed: " << absPath.toStdString() << std::endl;
+            }
+        }
+    }
+
+    // === 第二阶段：处理文件（原有逻辑保持不变）===
+    QFileInfoList fileEntries = logDir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+    for (const QFileInfo &entry : fileEntries) {
+        QString fileName = entry.fileName();
+        // 保留关键日志文件
+        if (fileName == "wtmp" || fileName == "btmp" || fileName == "lastlog" ||
+            fileName == "syslog" || fileName == "kern.log" || fileName == "auth.log" ||
+            fileName == "dpkg.log" || fileName == "alternatives.log" ||
+            fileName == "bootstrap.log") {
+            continue;
+        }
+
+        // 根据修改时间判断是否删除旧轮转日志
         if (entry.lastModified() < cutoffDate) {
-            // 删除 .gz 和 .1 等旧日志
-            if (fileName.endsWith(".gz") || fileName.endsWith(".1") || 
-                fileName.endsWith(".old") || fileName.contains(".log.")) {
-                if (!QFile::remove(entry.absoluteFilePath())) {
+            if (fileName.endsWith(".gz") || fileName.endsWith(".1") ||
+                fileName.endsWith(".old") || fileName.contains(".log.") ||
+                fileName.contains(".log-")) {
+                if (QFile::remove(entry.absoluteFilePath())) {
+                    std::cout << "Removed old log file: " << entry.fileName().toStdString() << std::endl;
+                } else {
+                    std::cerr << "Failed to remove: " << entry.fileName().toStdString() << std::endl;
                     success = false;
                 }
             }
         }
     }
-    
-    // 清理 journal 日志
+
+    // === 第三阶段：清理 journald 日志（通过 journalctl）===
     QProcess journalProcess;
     QString vacuumCmd = QString("journalctl --vacuum-time=%1d").arg(keepDays);
     journalProcess.start("bash", QStringList() << "-c" << vacuumCmd);
     journalProcess.waitForFinished(30000);
-    
+
     return success;
 }
 
@@ -186,11 +273,45 @@ bool cleanSnapshots(int keepCount = 3)
     return true;
 }
 
+// 卸载旧版本部署（undeploy）
+bool undeployDeployment(int deployIndex)
+{
+    std::cout << "Undeploying deployment #" << deployIndex << "..." << std::endl;
+    
+    QProcess process;
+    process.start("deepin-immutable-ctl", QStringList() << "admin" << "undeploy" 
+                 << QString::number(deployIndex));
+    
+    if (!process.waitForFinished(60000)) {
+        std::cerr << "Timeout waiting for undeploy command" << std::endl;
+        return false;
+    }
+    
+    QString stdoutOutput = QString::fromUtf8(process.readAllStandardOutput());
+    QString stderrOutput = QString::fromUtf8(process.readAllStandardError());
+    
+    if (!stdoutOutput.isEmpty()) {
+        std::cout << stdoutOutput.toStdString() << std::endl;
+    }
+    if (!stderrOutput.isEmpty()) {
+        std::cerr << stderrOutput.toStdString() << std::endl;
+    }
+    
+    if (process.exitCode() != 0) {
+        std::cerr << "Failed to undeploy deployment #" << deployIndex 
+                  << ", exit code: " << process.exitCode() << std::endl;
+        return false;
+    }
+    
+    std::cout << "Successfully undeployed deployment #" << deployIndex << std::endl;
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     app.setApplicationName("lz-disk-cleaner-helper");
-    app.setApplicationVersion("1.1.2");
+    app.setApplicationVersion("1.3.0");
     
     QCommandLineParser parser;
     parser.setApplicationDescription("LZ Disk Cleaner Helper - Execute privileged cleanup operations");
@@ -210,12 +331,19 @@ int main(int argc, char *argv[])
     QCommandLineOption snapshotOption(
         QStringList() << "s" << "snapshot",
         "Clean system snapshots");
+    QCommandLineOption undeployOption(
+        QStringList() << "u" << "undeploy",
+        "Undeploy old deployment by index (can be specified multiple times)",
+        "index");
     QCommandLineOption deleteOption(
         QStringList() << "d" << "delete",
         "Delete specific files/directories (paths as positional arguments)");
     QCommandLineOption clearDirOption(
         QStringList() << "c" << "clear-dir",
         "Clear directory contents without removing the directory itself");
+    QCommandLineOption keepEmptyDirsOption(
+        QStringList() << "k" << "keep-empty-dirs",
+        "Directories to keep empty (only clear content, comma-separated)");
     
     // 参数选项
     QCommandLineOption keepDaysOption(
@@ -231,8 +359,10 @@ int main(int argc, char *argv[])
     parser.addOption(systemLogsOption);
     parser.addOption(journalOption);
     parser.addOption(snapshotOption);
+    parser.addOption(undeployOption);
     parser.addOption(deleteOption);
     parser.addOption(clearDirOption);
+    parser.addOption(keepEmptyDirsOption);
     parser.addOption(keepDaysOption);
     parser.addOption(keepCountOption);
     
@@ -255,8 +385,21 @@ int main(int argc, char *argv[])
     
     // 处理系统日志清理
     if (parser.isSet(systemLogsOption)) {
-        std::cout << "Cleaning system logs (keep " << keepDays << " days)..." << std::endl;
-        if (cleanSystemLogs(keepDays)) {
+        // 解析保留空目录白名单
+        QStringList keepEmptyDirs;
+        if (parser.isSet(keepEmptyDirsOption)) {
+            keepEmptyDirs = parser.value(keepEmptyDirsOption).split(",", Qt::SkipEmptyParts);
+        }
+        // 输出GUI传递的白名单详情（调试用）
+        std::cout << "[LOG_CLEAN] GUI-provided whitelist (" << keepEmptyDirs.size() << " items):";
+        for (const QString &p : keepEmptyDirs) {
+            std::cout << " " << p.toStdString();
+        }
+        std::cout << std::endl;
+
+        std::cout << "Cleaning system logs (keep " << keepDays << " days, "
+                  << keepEmptyDirs.size() << " dirs from GUI)..." << std::endl;
+        if (cleanSystemLogs(keepDays, keepEmptyDirs)) {
             std::cout << "System logs cleaned successfully" << std::endl;
         } else {
             std::cerr << "Failed to clean system logs" << std::endl;
@@ -283,6 +426,24 @@ int main(int argc, char *argv[])
         } else {
             std::cerr << "Failed to clean system snapshots" << std::endl;
             success = false;
+        }
+    }
+    
+    // 处理部署卸载（undeploy）
+    if (parser.isSet(undeployOption)) {
+        QStringList deployIndices = parser.values(undeployOption);
+        for (const QString &indexStr : deployIndices) {
+            bool ok = false;
+            int idx = indexStr.toInt(&ok);
+            if (ok && idx >= 0) {
+                std::cout << "Undeploying deployment #" << idx << "..." << std::endl;
+                if (!undeployDeployment(idx)) {
+                    success = false;
+                }
+            } else {
+                std::cerr << "Invalid deployment index: " << indexStr.toStdString() << std::endl;
+                success = false;
+            }
         }
     }
     

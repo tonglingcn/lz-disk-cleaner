@@ -1,3 +1,55 @@
+lz-disk-cleaner (1.3.0-1) unstable; urgency=medium
+
+  * New upstream release v1.3.0
+  * Bug fixes:
+    - Fixed raw string literal (R"...") delimiter collision in regex patterns
+    - Fixed int.toStdString() type error in helper program
+    - Fixed custom cleanup dialog checkbox misalignment (dedicated column)
+    - Fixed /persistent partition scanning returning empty results
+    - Fixed du command exit code handling for permission-denied directories
+    - Changed immutable system deployment data status from "safe" to "dangerous"
+  * Performance improvements:
+    - Replaced synchronous QDir::removeRecursively with async rm -rf via QProcess
+    - Added CleanupThread class for non-blocking background deletion with progress feedback
+    - Removed redundant du -sb pre-scan before each file deletion
+    - Optimized getDirectorySize(): two-stage strategy (du -s fast → du -sb fallback)
+  * UI improvements:
+    - Custom cleanup tree widget restructured with dedicated checkbox column
+    - Unknown directory sizes displayed as "未知" instead of hidden
+    - Lowered minimum display threshold from 1MB to 4KB for scanned items
+
+ -- LZ Disk Cleaner Team <support@lz-disk-cleaner.org>  Sat, 12 Apr 2026 14:30:00 +0800
+
+lz-disk-cleaner (1.2.0-1) unstable; urgency=medium
+
+  * New upstream release v1.2.0
+  * Critical bug fixes:
+    - Fixed whitelist rules not being applied during cleanup
+    - Fixed "Keep Empty Directories" feature not working
+    - Fixed "Full Protection" rules being ignored
+    - Fixed "File Pattern Protection" not matching files
+    - Fixed system log cleanup ignoring retention days setting
+  * New features:
+    - Whitelist checking with path matching (exact and prefix)
+    - File pattern matching with wildcard support (*.lock, *.pid, etc.)
+    - System-level whitelist auto-merge with user configuration
+    - Detailed logging for whitelist checks
+  * Improvements:
+    - System logs now respect "Keep Days" setting (default: 7 days)
+    - Journal logs now respect "Keep Days" setting
+    - System snapshots now respect "Keep Count" setting (default: 3)
+    - Added helper program logging for privileged operations
+    - Better cleanup categorization (system logs, journal, snapshots)
+  * Technical changes:
+    - Added isPathInWhitelist() for path protection checking
+    - Added isFileMatchPattern() for file pattern matching
+    - Added cleanDirContent() to preserve directory structure
+    - Refactored cleanup logic to apply whitelist rules
+    - Fixed SYSTEM_LOGS using --system-logs option instead of direct deletion
+    - Fixed JOURNAL_LOGS using --journal option with keepDays parameter
+
+ -- LZ Disk Cleaner Team <support@lz-disk-cleaner.org>  Sat, 04 Apr 2026 12:45:00 +0800
+
 lz-disk-cleaner (1.1.1-1) unstable; urgency=medium
 
   * New upstream release v1.1.1

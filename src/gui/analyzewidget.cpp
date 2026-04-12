@@ -752,16 +752,135 @@ QList<ScanResult> ScanThread::scanCategory(ScanCategory category, const QString 
         if (deployDir.exists()) {
             ScanResult deployResult;
             deployResult.category = category;
-            deployResult.name = tr("系统部署数据");
+            deployResult.name = tr("系统部署数据 (总览)");
             deployResult.path = deployPath;
             deployResult.size = getDirectorySize(deployPath);
             deployResult.fileCount = 1;
             deployResult.isDirectory = true;
             deployResult.isDeletable = false;
-            deployResult.isDangerous = true;
-            deployResult.description = tr("当前系统部署版本数据");
+            deployResult.isDangerous = true;   // 总览项不可删除，标记为危险
+            deployResult.description = tr("当前及历史系统部署版本数据（不可直接删除）");
             results.append(deployResult);
             LOG_INFO(QString("Deploy size: %1").arg(deployResult.size));
+            
+            // ========== 解析各部署项（支持 undeploy 删除旧版本）==========
+            process.start("deepin-immutable-ctl", QStringList() << "admin" << "status" << "-d" << "all");
+            if (process.waitForFinished(5000)) {
+                QString rawOutput = QString::fromUtf8(process.readAllStandardOutput());
+                LOG_INFO(QString("Deploy raw output (first 500): %1").arg(rawOutput.left(500)));
+                
+                QRegularExpression jsonDeployRe(R"(\{[^{}]*"deployments"\s*:\s*\[([^\]]*)\])");
+                QRegularExpressionMatch jsonMatch = jsonDeployRe.match(rawOutput);
+                
+                int totalDeployCount = 0;
+                QList<ScanResult> deployItems;
+                
+                if (jsonMatch.hasMatch()) {
+                    QString deploymentsStr = jsonMatch.captured(1);
+                    QRegularExpression itemRe(R"(\{([^}]*)\})");
+                    auto iter = itemRe.globalMatch(deploymentsStr);
+                    
+                    while (iter.hasNext()) {
+                        QRegularExpressionMatch itemMatch = iter.next();
+                        QString itemStr = itemMatch.captured(1);
+                        
+                        int idx = totalDeployCount++;
+                        
+                        // 检测 booted 状态
+                        bool booted = itemStr.contains(R"XXX("booted":true)XXX")
+                                       || itemStr.contains("\"booted\"\\s*:\\s*true");
+
+                        QString depId, depVer, depTs;
+                        QRegularExpression idRe(R"XXX("id"\s*:\s*"([^"]+)")XXX");
+                        QRegularExpression verRe(R"XXX("version"\s*:\s*"([^"]+)")XXX");
+                        QRegularExpression tsRe(R"XXX("timestamp"\s*:\s*(\d+))XXX");
+                        QRegularExpressionMatch m;
+                        m = idRe.match(itemStr); if (m.hasMatch()) depId = m.captured(1).trimmed();
+                        m = verRe.match(itemStr); if (m.hasMatch()) depVer = m.captured(1).trimmed();
+                        m = tsRe.match(itemStr); if (m.hasMatch()) depTs = m.captured(1).trimmed();
+                        
+                        ScanResult depScanResult;
+                        depScanResult.category = category;
+                        depScanResult.deployIndex = idx;
+                        depScanResult.path = QString("/ostree/deploy/deepin-%1").arg(idx);
+                        depScanResult.isDirectory = true;
+                        depScanResult.isDeletable = !booted;
+                        depScanResult.isDangerous = !booted;
+                        depScanResult.fileCount = 1;
+                        
+                        if (booted) {
+                            depScanResult.name = tr("⭐ 部署 #%1 [当前使用]").arg(idx)
+                                + (depVer.isEmpty() ? "" : (" - " + depVer));
+                            depScanResult.description = tr("正在运行的系统部署，不可删除");
+                            depScanResult.purpose = tr("🟢 当前运行");
+                            depScanResult.size = 0;
+                        } else {
+                            depScanResult.name = tr("📦 历史部署 #%1").arg(idx)
+                                + (depVer.isEmpty() ? "" : (" - " + depVer));
+                            depScanResult.description = tr("旧版本部署，可通过 undeploy 释放空间")
+                                + (depTs.isEmpty() ? "" : ("\n" + depTs));
+                            depScanResult.purpose = tr("🔶 可删除");
+                            
+                            // 尝试获取单个部署大小
+                            QString singleDeployPath = QString("/ostree/deploy/deepin/deploy/%1").arg(idx);
+                            QDir sd(singleDeployPath);
+                            if (sd.exists()) {
+                                depScanResult.size = getDirectorySize(singleDeployPath);
+                            } else {
+                                qint64 totalDeploySize = getDirectorySize(deployPath);
+                                depScanResult.size = totalDeploySize / qMax(totalDeployCount, 1);
+                            }
+                        }
+                        
+                        results.append(depScanResult);
+                        LOG_INFO(QString("  Deploy #%1: booted=%2, size=%3")
+                                 .arg(idx).arg(booted).arg(depScanResult.size));
+                    }
+                } else {
+                    // 文本模式：检测 deploy-N 模式
+                    QRegularExpression textDeployRe(R"(deploy-(\d+)[^0-9])");
+                    auto textIter = textDeployRe.globalMatch(rawOutput);
+                    int maxIdx = -1;
+                    while (textIter.hasNext()) {
+                        QRegularExpressionMatch tm = textIter.next();
+                        int ti = tm.captured(1).toInt();
+                        if (ti > maxIdx) maxIdx = ti;
+                    }
+                    
+                    if (maxIdx >= 0) {
+                        for (int i = 0; i <= maxIdx; ++i) {
+                            ScanResult depScanResult;
+                            depScanResult.category = category;
+                            depScanResult.deployIndex = i;
+                            depScanResult.path = QString("/ostree/deploy/deepin-%1").arg(i);
+                            depScanResult.isDirectory = true;
+                            depScanResult.fileCount = 1;
+                            
+                            if (i == maxIdx) {
+                                depScanResult.isDeletable = false;
+                                depScanResult.isDangerous = false;
+                                depScanResult.name = tr("⭐ 部署 #%1 [当前使用]").arg(i);
+                                depScanResult.description = tr("正在运行的系统部署，不可删除");
+                                depScanResult.purpose = tr("🟢 当前运行");
+                                depScanResult.size = 0;
+                            } else {
+                                depScanResult.isDeletable = true;
+                                depScanResult.isDangerous = true;
+                                depScanResult.name = tr("📦 历史部署 #%1").arg(i);
+                                depScanResult.description = tr("旧版本部署，可通过 undeploy 释放空间");
+                                depScanResult.purpose = tr("🔶 可删除");
+                                
+                                QString singleDeployPath = QString("/ostree/deploy/deepin/deploy/%1").arg(i);
+                                QDir sd(singleDeployPath);
+                                if (sd.exists()) {
+                                    depScanResult.size = getDirectorySize(singleDeployPath);
+                                }
+                            }
+                            results.append(depScanResult);
+                        }
+                    }
+                }
+            }
         }
         
         // 3. 扫描 debtree 目录
@@ -1461,6 +1580,12 @@ static void collectSelectedItems(QTreeWidgetItem *item, ScanCategory category,
             // 获取应用ID（用于玲珑应用卸载）
             result.appId = item->data(0, Qt::UserRole + 1).toString();
             result.category = category;
+            // 获取部署编号（用于 undeploy 操作）
+            int di = item->data(3, Qt::UserRole + 1).toInt();
+            if (di >= 0) {
+                result.deployIndex = di;
+                LOG_INFO(QString("Collecting deploy item: %1, deployIndex=%2").arg(result.name).arg(di));
+            }
             selectedItems.append(result);
         }
         
@@ -1670,6 +1795,12 @@ static void addResultToTreeItem(QTreeWidgetItem *parent, const ScanResult &resul
     
     // 存储显示名称（不带图标）
     item->setData(0, Qt::UserRole + 2, result.name);
+    
+    // 存储部署编号（用于 undeploy 操作，-1 表示非部署项）
+    if (result.deployIndex >= 0) {
+        item->setData(3, Qt::UserRole + 1, result.deployIndex);
+        LOG_INFO(QString("Storing deployIndex=%1 for item: %2").arg(result.deployIndex).arg(result.name));
+    }
     
     // 设置状态 - 根据类别和危险程度显示不同状态
     if (result.isDangerous) {

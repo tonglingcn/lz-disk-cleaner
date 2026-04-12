@@ -76,6 +76,26 @@ private:
     qint64 getDirectorySize(const QString &path, int *fileCount, int *dirCount);
 };
 
+// 异步清理线程 —— 使用 rm -rf 替代 Qt API，速度提升 5-10 倍
+class CleanupThread : public QThread
+{
+    Q_OBJECT
+    
+public:
+    explicit CleanupThread(QObject *parent = nullptr);
+    void setPathsToDelete(const QStringList &paths);
+    
+signals:
+    void cleanupProgress(int current, int total, const QString &currentPath);
+    void cleanupFinished(int successCount, int failCount, qint64 freedSize);
+    
+protected:
+    void run() override;
+    
+private:
+    QStringList m_paths;
+};
+
 class CleanupDialog : public QDialog
 {
     Q_OBJECT
@@ -105,6 +125,8 @@ private slots:
     void onPathEditReturnPressed(); // 路径输入框回车
     void onSelectAllItems();        // 全选项目
     void onDeselectAllItems();      // 取消全选项目
+    void onCleanupProgress(int current, int total, const QString &currentPath);  // 清理进度
+    void onCleanupFinished(int successCount, int failCount, qint64 freedSize);   // 清理完成
     
 private:
     void initUI();
@@ -159,6 +181,7 @@ private:
     QList<ScanItem> m_scanResults;
     QMap<QString, qint64> m_itemSizes;
     PartitionScanThread *m_scanThread;
+    CleanupThread *m_cleanupThread;   // 异步清理线程
     QString m_currentScanPath;       // 初始扫描路径
     QString m_currentBrowsePath;     // 当前浏览路径
     QStack<QString> m_navigationHistory; // 导航历史

@@ -26,6 +26,9 @@ SettingsDialog::SettingsDialog(QWidget *parent)
     , m_journalMaxSizeSpin(nullptr)
     , m_snapshotKeepCountSpin(nullptr)
     , m_confirmBeforeCleanupCheck(nullptr)
+    , m_closeActionGroup(nullptr)
+    , m_closeQuitRadio(nullptr)
+    , m_closeMinimizeRadio(nullptr)
 
 {
     initUI();
@@ -148,6 +151,20 @@ void SettingsDialog::createGeneralTab(QVBoxLayout *layout)
     m_confirmBeforeCleanupCheck = new QCheckBox(tr("清理前显示确认对话框"));
     m_confirmBeforeCleanupCheck->setChecked(true);
     behaviorLayout->addWidget(m_confirmBeforeCleanupCheck);
+    
+    // 关闭窗口行为
+    QLabel *closeActionLabel = new QLabel(tr("关闭窗口时:"));
+    closeActionLabel->setStyleSheet("font-weight: bold; margin-top: 8px;");
+    behaviorLayout->addWidget(closeActionLabel);
+    
+    m_closeActionGroup = new QButtonGroup(this);
+    m_closeQuitRadio = new QRadioButton(tr("直接退出程序"));
+    m_closeMinimizeRadio = new QRadioButton(tr("最小化到系统托盘"));
+    m_closeQuitRadio->setChecked(true);
+    m_closeActionGroup->addButton(m_closeQuitRadio, 0);
+    m_closeActionGroup->addButton(m_closeMinimizeRadio, 1);
+    behaviorLayout->addWidget(m_closeQuitRadio);
+    behaviorLayout->addWidget(m_closeMinimizeRadio);
     
     layout->addWidget(behaviorGroup);
     layout->addStretch();
@@ -324,6 +341,14 @@ void SettingsDialog::loadSettings()
     m_journalMaxSizeSpin->setValue(config->getJournalMaxSizeMB());
     m_snapshotKeepCountSpin->setValue(config->getSnapshotKeepCount());
     m_confirmBeforeCleanupCheck->setChecked(config->getConfirmBeforeCleanup());
+    
+    // 加载关闭行为设置
+    int closeAction = config->getCloseAction();
+    if (closeAction == 1) {
+        m_closeMinimizeRadio->setChecked(true);
+    } else {
+        m_closeQuitRadio->setChecked(true);
+    }
 
     
     // 加载用户级白名单
@@ -352,6 +377,7 @@ void SettingsDialog::saveSettings()
     config->setJournalMaxSizeMB(m_journalMaxSizeSpin->value());
     config->setSnapshotKeepCount(m_snapshotKeepCountSpin->value());
     config->setConfirmBeforeCleanup(m_confirmBeforeCleanupCheck->isChecked());
+    config->setCloseAction(m_closeActionGroup->checkedId());
 
     
     // 保存用户级白名单

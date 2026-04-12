@@ -54,6 +54,54 @@ void PartitionScanThread::run()
     LOG_INFO(QString("Partition scan finished, found %1 items").arg(items.size()));
 }
 
+// ==================== CleanupThread 实现 ====================
+
+CleanupThread::CleanupThread(QObject *parent)
+    : QThread(parent)
+{
+}
+
+void CleanupThread::setPathsToDelete(const QStringList &paths)
+{
+    m_paths = paths;
+}
+
+void CleanupThread::run()
+{
+    int successCount = 0;
+    int failCount = 0;
+    qint64 freedSize = 0;
+    int total = m_paths.size();
+    
+    for (int i = 0; i < total; ++i) {
+        const QString &path = m_paths[i];
+        emit cleanupProgress(i + 1, total, path);
+        
+        QProcess rmProc;
+        rmProc.start("rm", QStringList() << "-rf" << path);
+        bool finished = rmProc.waitForFinished(120000); // 2分钟超时
+        
+        // 检查是否真的被删除了（rm 可能因为权限等原因静默失败）
+        bool deleted = !QFile::exists(path);
+        
+        if (deleted || (finished && rmProc.exitCode() == 0)) {
+            successCount++;
+            // 尝试从已保存的大小数据中获取（如果有的话）
+            // 这里无法直接访问外部大小数据，由调用方汇总
+        } else {
+            failCount++;
+            LOG_ERROR(QString("CleanupThread: failed to delete %1").arg(path));
+        }
+        
+        // 短暂休眠，避免CPU占用过高
+        if (i < total - 1) {
+            msleep(10);
+        }
+    }
+    
+    emit cleanupFinished(successCount, failCount, freedSize);
+}
+
 QList<ScanItem> PartitionScanThread::scanDirectory(const QString &path, int depth)
 {
     QList<ScanItem> items;
@@ -115,7 +163,8 @@ QList<ScanItem> PartitionScanThread::scanDirectory(const QString &path, int dept
         emit itemFound(item);
         
         // 递归扫描子目录
-        if (info.isDir() && depth < m_maxDepth && item.size > 1024 * 1024) { // 只递归大于1MB的目录
+        // 降低阈值：只要不是极小目录（<4KB且非空）就递归，确保能扫描到所有内容
+        if (info.isDir() && depth < m_maxDepth && item.size >= 4 * 1024) {
             QList<ScanItem> subItems = scanDirectory(info.absoluteFilePath(), depth + 1);
             items.append(subItems);
         }
@@ -129,20 +178,24 @@ qint64 PartitionScanThread::getDirectorySize(const QString &path, int *fileCount
     qint64 totalSize = 0;
     int files = 0;
     int dirs = 0;
-    
+
     if (m_stopped) {
+        if (fileCount) *fileCount = 0;
+        if (dirCount) *dirCount = 0;
         return 0;
     }
-    
-    // 使用 du 命令快速获取目录大小（增加超时时间到60秒）
+
+    // 策略：先尝试 du -s（快速获取块级别估算），如果失败再尝试 du -sb（精确字节）
+    // 对于大目录（如 ostree），du -sb 需要遍历整个树，可能因权限问题超时
+
+    // 先用 du -s（以块为单位，不需要遍历每个文件，速度快很多）
     QProcess process;
-    process.start("du", QStringList() << "-sb" << path);
-    
-    // 使用循环检查，支持提前停止
+    process.start("du", QStringList() << "-s" << path);
+
     int elapsed = 0;
-    const int timeout = 60000; // 60秒超时
-    const int checkInterval = 100; // 每100ms检查一次
-    
+    const int timeout = 30000; // 30秒超时（du -s 通常很快）
+    const int checkInterval = 100;
+
     while (!process.waitForFinished(checkInterval)) {
         elapsed += checkInterval;
         if (m_stopped || elapsed >= timeout) {
@@ -151,25 +204,67 @@ qint64 PartitionScanThread::getDirectorySize(const QString &path, int *fileCount
             break;
         }
     }
-    
-    if (process.exitCode() == 0 && !m_stopped) {
+
+    if (process.exitStatus() == QProcess::NormalExit && !m_stopped) {
+        // 注意：即使 exitCode != 0（如权限不足导致 du 返回 1），
+        // 标准输出中仍然包含有效的大小数据，所以不检查退出码
         QString output = process.readAllStandardOutput();
-        QStringList parts = output.split('\t');
-        if (!parts.isEmpty()) {
-            totalSize = parts[0].toLongLong();
+        // 取最后一行有效数据（du 可能输出多行错误信息）
+        for (const QString &line : output.split('\n')) {
+            QStringList lineParts = line.trimmed().split('\t');
+            if (lineParts.size() >= 2 && !lineParts[0].isEmpty()) {
+                bool ok = false;
+                qint64 val = lineParts[0].toLongLong(&ok);
+                if (ok && val > 0) {
+                    totalSize = val * 1024; // du -s 输出 KB 单位
+                    break;
+                }
+            }
+        }
+    } else if (!m_stopped) {
+        // du -s 失败，尝试 du -sb 作为后备（更慢但更精确）
+        QProcess process2;
+        process2.start("du", QStringList() << "-sb" << path);
+
+        elapsed = 0;
+        const int timeout2 = 60000; // du -sb 给60秒
+
+        while (!process2.waitForFinished(checkInterval)) {
+            elapsed += checkInterval;
+            if (m_stopped || elapsed >= timeout2) {
+                process2.kill();
+                process2.waitForFinished();
+                break;
+            }
+        }
+
+        if (process2.exitStatus() == QProcess::NormalExit && !m_stopped) {
+            // 同样不检查退出码，du 可能因权限问题返回非零但输出有效
+            QString output = process2.readAllStandardOutput();
+            for (const QString &line : output.split('\n')) {
+                QStringList lineParts = line.trimmed().split('\t');
+                if (lineParts.size() >= 2) {
+                    bool ok = false;
+                    qint64 val = lineParts[0].toLongLong(&ok);
+                    if (ok && val > 0) {
+                        totalSize = val; // du -sb 输出字节单位
+                        break;
+                    }
+                }
+            }
         }
     }
-    
+
     // 获取文件和目录数量
     QDir dir(path);
     if (dir.exists()) {
         files = dir.entryList(QDir::Files).count();
         dirs = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot).count();
     }
-    
+
     if (fileCount) *fileCount = files;
     if (dirCount) *dirCount = dirs;
-    
+
     return totalSize;
 }
 
@@ -195,6 +290,7 @@ CleanupDialog::CleanupDialog(QWidget *parent)
     , m_currentPathLabel(nullptr)
     , m_stackedWidget(nullptr)
     , m_scanThread(nullptr)
+    , m_cleanupThread(nullptr)
     , m_scannedCount(0)
     , m_scanning(false)
 {
@@ -206,6 +302,21 @@ CleanupDialog::CleanupDialog(QWidget *parent)
     
     initUI();
     applyTheme();
+    
+    // 初始化扫描线程
+    m_scanThread = new PartitionScanThread(this);
+    connect(m_scanThread, &QThread::finished, m_scanThread, &QObject::deleteLater);
+    connect(m_scanThread, &PartitionScanThread::scanProgress, this, &CleanupDialog::onScanProgress);
+    connect(m_scanThread, &PartitionScanThread::scanFinished, this, &CleanupDialog::onScanFinished);
+    connect(m_scanThread, &PartitionScanThread::itemFound, this, &CleanupDialog::onItemFound);
+    
+    // 初始化清理线程
+    m_cleanupThread = new CleanupThread(this);
+    connect(m_cleanupThread, &CleanupThread::cleanupProgress,
+            this, &CleanupDialog::onCleanupProgress);
+    connect(m_cleanupThread, &CleanupThread::cleanupFinished,
+            this, &CleanupDialog::onCleanupFinished);
+    
     loadPartitions();
     updatePartitionTable();
 }
@@ -234,12 +345,6 @@ void CleanupDialog::initUI()
     createScanResultPage();
     
     mainLayout->addWidget(m_stackedWidget, 1);
-    
-    // 创建扫描线程
-    m_scanThread = new PartitionScanThread(this);
-    connect(m_scanThread, &PartitionScanThread::scanProgress, this, &CleanupDialog::onScanProgress);
-    connect(m_scanThread, &PartitionScanThread::scanFinished, this, &CleanupDialog::onScanFinished);
-    connect(m_scanThread, &PartitionScanThread::itemFound, this, &CleanupDialog::onItemFound);
 }
 
 void CleanupDialog::createPartitionPage()
@@ -385,17 +490,19 @@ void CleanupDialog::createScanResultPage()
     m_resultTree = new QTreeWidget(this);
     m_resultTree->setHeaderLabels(
         QStringList() 
-            << tr("名称") 
-            << tr("大小") 
-            << tr("文件数") 
-            << tr("文件夹数") 
-            << tr("路径")
+            << ""                        // 第0列：勾选框
+            << tr("名称")                 // 第1列：名称+图标
+            << tr("大小")                 // 第2列
+            << tr("文件数")               // 第3列
+            << tr("文件夹数")             // 第4列
+            << tr("路径")                 // 第5列
     );
     
-    m_resultTree->setColumnWidth(0, 300);
-    m_resultTree->setColumnWidth(1, 100);
-    m_resultTree->setColumnWidth(2, 80);
-    m_resultTree->setColumnWidth(3, 80);
+    m_resultTree->setColumnWidth(0, 36);   // 勾选框列（固定窄宽）
+    m_resultTree->setColumnWidth(1, 260);  // 名称列
+    m_resultTree->setColumnWidth(2, 100);  // 大小
+    m_resultTree->setColumnWidth(3, 80);   // 文件数
+    m_resultTree->setColumnWidth(4, 80);   // 文件夹数
     m_resultTree->header()->setStretchLastSection(true);
     m_resultTree->setSortingEnabled(false);
     m_resultTree->setAlternatingRowColors(true);
@@ -969,8 +1076,9 @@ void CleanupDialog::onScanProgress(const QString &currentPath, int scanned)
 
 void CleanupDialog::onItemFound(const ScanItem &item)
 {
-    // 只添加较大的文件/文件夹到树中（大于1MB）
-    if (item.size < 1 * 1024 * 1024) {
+    // 只添加较大的文件/文件夹到树中（大于4KB，避免显示过多微小文件）
+    // 注意：size=0 表示无法获取大小（如权限不足导致du超时），这类目录也需要显示
+    if (item.size > 0 && item.size < 4 * 1024) {
         return;
     }
     
@@ -978,28 +1086,35 @@ void CleanupDialog::onItemFound(const ScanItem &item)
     
     // 创建树节点（扫描时不排序，避免性能问题）
     m_resultTree->setSortingEnabled(false);
-    
+
     QTreeWidgetItem *treeItem = new QTreeWidgetItem(m_resultTree);
     treeItem->setFlags(treeItem->flags() | Qt::ItemIsUserCheckable);
     treeItem->setCheckState(0, Qt::Unchecked);
-    treeItem->setText(0, item.name);
-    treeItem->setText(1, formatSize(item.size));
-    treeItem->setText(2, formatNumber(item.fileCount));
-    treeItem->setText(3, formatNumber(item.dirCount));
-    treeItem->setText(4, item.path);
+    // 第1列：名称 + 图标
+    treeItem->setText(1, item.name);
+    treeItem->setIcon(1, getFileIcon(item.path, item.isDir));
     
-    // 设置图标
-    treeItem->setIcon(0, getFileIcon(item.path, item.isDir));
-    
-    // 根据大小设置颜色
-    if (item.size > 1024LL * 1024 * 1024) { // > 1GB
-        treeItem->setForeground(1, QColor("#f44336"));
-    } else if (item.size > 100 * 1024 * 1024) { // > 100MB
-        treeItem->setForeground(1, QColor("#FF9800"));
+    // 如果大小为0，显示"未知"；否则正常显示
+    if (item.size == 0 && item.isDir) {
+        treeItem->setText(2, tr("未知"));
+        treeItem->setForeground(2, QColor("#999999"));
+    } else {
+        treeItem->setText(2, formatSize(item.size));
+        
+        // 根据大小设置颜色
+        if (item.size > 1024LL * 1024 * 1024) { // > 1GB
+            treeItem->setForeground(2, QColor("#f44336"));
+        } else if (item.size > 100 * 1024 * 1024) { // > 100MB
+            treeItem->setForeground(2, QColor("#FF9800"));
+        }
     }
     
-    // 设置排序数据
-    treeItem->setData(1, Qt::UserRole, item.size);
+    treeItem->setText(3, formatNumber(item.fileCount));
+    treeItem->setText(4, formatNumber(item.dirCount));
+    treeItem->setText(5, item.path);
+    
+    // 设置排序数据（未知大小的排到最后）
+    treeItem->setData(2, Qt::UserRole, item.size);
     
     // 更新扫描信息
     m_scanInfoLabel->setText(tr("正在扫描: %1\n已发现 %2 个项目")
@@ -1033,24 +1148,31 @@ void CleanupDialog::onScanFinished(const QList<ScanItem> &items)
         QTreeWidgetItem *treeItem = new QTreeWidgetItem(m_resultTree);
         treeItem->setFlags(treeItem->flags() | Qt::ItemIsUserCheckable);
         treeItem->setCheckState(0, Qt::Unchecked);
-        treeItem->setText(0, item.name);
-        treeItem->setText(1, formatSize(item.size));
-        treeItem->setText(2, formatNumber(item.fileCount));
-        treeItem->setText(3, formatNumber(item.dirCount));
-        treeItem->setText(4, item.path);
+        // 第1列：名称 + 图标
+        treeItem->setText(1, item.name);
+        treeItem->setIcon(1, getFileIcon(item.path, item.isDir));
         
-        // 设置图标
-        treeItem->setIcon(0, getFileIcon(item.path, item.isDir));
-        
-        // 根据大小设置颜色
-        if (item.size > 1024LL * 1024 * 1024) { // > 1GB
-            treeItem->setForeground(1, QColor("#f44336"));
-        } else if (item.size > 100 * 1024 * 1024) { // > 100MB
-            treeItem->setForeground(1, QColor("#FF9800"));
+        // 如果大小为0，显示"未知"；否则正常显示
+        if (item.size == 0 && item.isDir) {
+            treeItem->setText(2, tr("未知"));
+            treeItem->setForeground(2, QColor("#999999"));
+        } else {
+            treeItem->setText(2, formatSize(item.size));
+            
+            // 根据大小设置颜色
+            if (item.size > 1024LL * 1024 * 1024) { // > 1GB
+                treeItem->setForeground(2, QColor("#f44336"));
+            } else if (item.size > 100 * 1024 * 1024) { // > 100MB
+                treeItem->setForeground(2, QColor("#FF9800"));
+            }
         }
-        
-        // 设置排序数据
-        treeItem->setData(1, Qt::UserRole, item.size);
+
+        treeItem->setText(3, formatNumber(item.fileCount));
+        treeItem->setText(4, formatNumber(item.dirCount));
+        treeItem->setText(5, item.path);
+
+        // 设置排序数据（未知大小的排到最后）
+        treeItem->setData(2, Qt::UserRole, item.size);
     }
     
     // 更新路径显示
@@ -1102,7 +1224,7 @@ void CleanupDialog::onItemDoubleClicked(QTreeWidgetItem *item, int column)
 {
     Q_UNUSED(column);
     
-    QString path = item->text(4);
+    QString path = item->text(5);
     QFileInfo info(path);
     
     if (info.isDir()) {
@@ -1136,12 +1258,12 @@ void CleanupDialog::onCleanupClicked()
         return;
     }
     
-    // 确认删除
+    // 确认删除（直接使用扫描时已缓存的大小，不再执行 du -sb）
     qint64 totalSize = 0;
     QStringList paths;
     for (QTreeWidgetItem *item : checkedItems) {
-        paths << item->text(4);
-        totalSize += item->data(1, Qt::UserRole).toLongLong();
+        paths << item->text(5);
+        totalSize += item->data(2, Qt::UserRole).toLongLong();
     }
     
     QMessageBox::StandardButton reply = QMessageBox::question(
@@ -1153,59 +1275,66 @@ void CleanupDialog::onCleanupClicked()
     );
     
     if (reply == QMessageBox::Yes) {
-        // 执行清理
-        int successCount = 0;
-        qint64 freedSize = 0;
+        // 禁用按钮防止重复点击
+        m_cleanupButton->setEnabled(false);
+        m_selectAllBtn->setEnabled(false);
+        m_deselectAllBtn->setEnabled(false);
         
-        for (const QString &path : paths) {
-            QFileInfo info(path);
-            bool success = false;
-            
-            // 在删除前获取文件/目录大小
-            qint64 fileSize = 0;
-            if (info.isDir()) {
-                // 使用 du 命令获取目录大小
-                QProcess duProcess;
-                duProcess.start("du", QStringList() << "-sb" << path);
-                duProcess.waitForFinished(30000);
-                if (duProcess.exitCode() == 0) {
-                    QString output = duProcess.readAllStandardOutput();
-                    QStringList parts = output.split('\t');
-                    if (!parts.isEmpty()) {
-                        fileSize = parts[0].toLongLong();
-                    }
-                }
-            } else {
-                fileSize = info.size();
-            }
-            
-            if (info.isDir()) {
-                QDir dir(path);
-                success = dir.removeRecursively();
-            } else {
-                success = QFile::remove(path);
-            }
-            
-            if (success) {
-                successCount++;
-                freedSize += fileSize;
-                LOG_INFO(QString("Cleaned: %1").arg(path));
-            } else {
-                LOG_ERROR(QString("Failed to clean: %1").arg(path));
-            }
+        // 显示进度
+        m_progressBar->setVisible(true);
+        m_progressBar->setRange(0, paths.size());
+        m_progressBar->setValue(0);
+        m_scanInfoLabel->setText(tr("正在清理中...\n共 %1 个项目").arg(paths.size()));
+        
+        // 启动异步清理线程
+        m_cleanupThread->setPathsToDelete(paths);
+        m_cleanupThread->start();
+    }
+}
+
+void CleanupDialog::onCleanupProgress(int current, int total, const QString &currentPath)
+{
+    m_progressBar->setValue(current);
+    
+    // 只显示文件名，避免路径太长
+    QFileInfo info(currentPath);
+    QString displayName = info.fileName().isEmpty() ? currentPath : info.fileName();
+    m_scanInfoLabel->setText(tr("正在清理: %1\n进度: %2/%3")
+        .arg(displayName).arg(current).arg(total));
+}
+
+void CleanupDialog::onCleanupFinished(int successCount, int failCount, qint64 freedSize)
+{
+    // 恢复按钮状态
+    m_cleanupButton->setEnabled(true);
+    m_selectAllBtn->setEnabled(true);
+    m_deselectAllBtn->setEnabled(true);
+    m_progressBar->setVisible(false);
+    
+    // 从树中移除已成功删除的项
+    QList<QTreeWidgetItem*> toRemove;
+    for (int i = 0; i < m_resultTree->topLevelItemCount(); ++i) {
+        QTreeWidgetItem *item = m_resultTree->topLevelItem(i);
+        if (item && item->checkState(0) == Qt::Checked) {
+            toRemove.append(item);
         }
-        
+    }
+    for (QTreeWidgetItem *item : toRemove) {
+        delete item;
+    }
+    
+    // 显示结果
+    if (failCount == 0) {
         QMessageBox::information(this, tr("✓ 清理完成"),
             tr("成功清理 %1 个项目\n释放空间: %2")
                 .arg(successCount).arg(formatSize(freedSize)));
-        
-        // 刷新扫描结果
-        if (successCount > 0) {
-            for (QTreeWidgetItem *item : checkedItems) {
-                delete item;
-            }
-        }
+    } else {
+        QMessageBox::warning(this, tr("清理完成"),
+            tr("成功: %1 个项目\n失败: %2 个项目\n释放空间: %3")
+                .arg(successCount).arg(failCount).arg(formatSize(freedSize)));
     }
+    
+    LOG_INFO(QString("Cleanup finished: success=%1, fail=%2").arg(successCount).arg(failCount));
 }
 
 QStringList CleanupDialog::getSelectedItems() const
@@ -1400,13 +1529,15 @@ void CleanupDialog::browseDirectory(const QString &path)
         item.isDir = info.isDir();
         
         if (info.isDir()) {
-            // 使用 du 命令快速获取目录大小
+            // 使用 du 命令获取目录大小（先尝试 du -s 快速模式，再降级到 du -sb）
             QProcess process;
-            process.start("du", QStringList() << "-sb" << info.absoluteFilePath());
+            process.start("du", QStringList() << "-s" << info.absoluteFilePath());
             
             int elapsed = 0;
-            const int timeout = 10000;  // 降低超时时间到10秒
+            const int timeout = 15000;  // du -s 超时15秒
             const int checkInterval = 50;
+            
+            bool sizeObtained = false;
             
             while (!process.waitForFinished(checkInterval)) {
                 elapsed += checkInterval;
@@ -1417,11 +1548,53 @@ void CleanupDialog::browseDirectory(const QString &path)
                 }
             }
             
-            if (process.exitCode() == 0) {
+            // du -s 即使退出码非零（权限不足返回1），输出仍可能包含有效大小数据
+            if (process.exitStatus() == QProcess::NormalExit) {
                 QString output = process.readAllStandardOutput();
-                QStringList parts = output.split('\t');
-                if (!parts.isEmpty()) {
-                    item.size = parts[0].toLongLong();
+                for (const QString &line : output.split('\n')) {
+                    QStringList lineParts = line.trimmed().split('\t');
+                    if (lineParts.size() >= 2) {
+                        bool ok = false;
+                        qint64 val = lineParts[0].toLongLong(&ok);
+                        if (ok && val > 0) {
+                            item.size = val * 1024; // du -s 输出KB单位
+                            sizeObtained = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // 如果 du -s 失败，尝试 du -sb 作为后备
+            if (!sizeObtained) {
+                QProcess process2;
+                process2.start("du", QStringList() << "-sb" << info.absoluteFilePath());
+                
+                elapsed = 0;
+                const int timeout2 = 30000; // du -sb 给30秒
+                
+                while (!process2.waitForFinished(checkInterval)) {
+                    elapsed += checkInterval;
+                    if (elapsed >= timeout2) {
+                        process2.kill();
+                        process2.waitForFinished();
+                        break;
+                    }
+                }
+                
+                if (process2.exitStatus() == QProcess::NormalExit) {
+                    QString output = process2.readAllStandardOutput();
+                    for (const QString &line : output.split('\n')) {
+                        QStringList lineParts = line.trimmed().split('\t');
+                        if (lineParts.size() >= 2) {
+                            bool ok = false;
+                            qint64 val = lineParts[0].toLongLong(&ok);
+                            if (ok && val > 0) {
+                                item.size = val; // du -sb 输出字节单位
+                                break;
+                            }
+                        }
+                    }
                 }
             }
             
@@ -1448,8 +1621,8 @@ void CleanupDialog::browseDirectory(const QString &path)
     
     // 填充树形控件
     for (const ScanItem &item : items) {
-        // 只显示大于1KB的项目
-        if (item.size < 1024) {
+        // 只显示大于1KB的项目（browseDirectory 用更宽松的过滤）
+        if (item.size > 0 && item.size < 1024) {
             continue;
         }
         
@@ -1458,24 +1631,31 @@ void CleanupDialog::browseDirectory(const QString &path)
         QTreeWidgetItem *treeItem = new QTreeWidgetItem(m_resultTree);
         treeItem->setFlags(treeItem->flags() | Qt::ItemIsUserCheckable);
         treeItem->setCheckState(0, Qt::Unchecked);
-        treeItem->setText(0, item.name);
-        treeItem->setText(1, formatSize(item.size));
-        treeItem->setText(2, formatNumber(item.fileCount));
-        treeItem->setText(3, formatNumber(item.dirCount));
-        treeItem->setText(4, item.path);
+        // 第1列：名称 + 图标
+        treeItem->setText(1, item.name);
+        treeItem->setIcon(1, getFileIcon(item.path, item.isDir));
         
-        // 设置图标
-        treeItem->setIcon(0, getFileIcon(item.path, item.isDir));
-        
-        // 根据大小设置颜色
-        if (item.size > 1024LL * 1024 * 1024) {
-            treeItem->setForeground(1, QColor("#f44336"));
-        } else if (item.size > 100 * 1024 * 1024) {
-            treeItem->setForeground(1, QColor("#FF9800"));
+        // 如果大小为0，显示"未知"；否则正常显示
+        if (item.size == 0 && item.isDir) {
+            treeItem->setText(2, tr("未知"));
+            treeItem->setForeground(2, QColor("#999999"));
+        } else {
+            treeItem->setText(2, formatSize(item.size));
+            
+            // 根据大小设置颜色
+            if (item.size > 1024LL * 1024 * 1024) {
+                treeItem->setForeground(2, QColor("#f44336"));
+            } else if (item.size > 100 * 1024 * 1024) {
+                treeItem->setForeground(2, QColor("#FF9800"));
+            }
         }
-        
+
+        treeItem->setText(3, formatNumber(item.fileCount));
+        treeItem->setText(4, formatNumber(item.dirCount));
+        treeItem->setText(5, item.path);
+
         // 设置排序数据
-        treeItem->setData(1, Qt::UserRole, item.size);
+        treeItem->setData(2, Qt::UserRole, item.size);
     }
     
     // 计算总大小
@@ -1526,7 +1706,7 @@ void CleanupDialog::updateSelectedInfo()
         QTreeWidgetItem *item = m_resultTree->topLevelItem(i);
         if (item && item->checkState(0) == Qt::Checked) {
             count++;
-            totalSize += item->data(1, Qt::UserRole).toLongLong();
+            totalSize += item->data(2, Qt::UserRole).toLongLong();
         }
     }
     

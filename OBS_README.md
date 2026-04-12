@@ -2,7 +2,7 @@
 
 ## 项目信息
 - 项目名称: lz-disk-cleaner
-- 版本: 1.1.1
+- 版本: 1.2.0
 - 源码地址: https://github.com/tonglingcn/lz-disk-cleaner
 
 ## 支持的发行版

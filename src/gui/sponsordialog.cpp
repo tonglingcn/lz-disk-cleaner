@@ -34,7 +34,7 @@ void SponsorDialog::initUI()
 
     // 描述
     m_descLabel = new QLabel(
-        tr("<p>感谢您使用磁盘清理工具，如果条件允许可以赞助支持。</p>"
+        tr("<p>感谢您使用磁盘清理工具。</p>"
            "<p>您的支持是我持续改进的动力！❤️</p>"),
         this);
     m_descLabel->setAlignment(Qt::AlignCenter);

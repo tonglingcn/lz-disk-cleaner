@@ -34,6 +34,8 @@
 #include <QGuiApplication>
 #include <QElapsedTimer>
 #include <QRandomGenerator>
+#include <QRegularExpression>
+#include <QRegularExpression>
 
 #ifdef HAVE_XCB
 #include <xcb/xcb.h>
@@ -584,20 +586,71 @@ void MainWindow::onSmartCleanupClicked()
     duTrash.waitForFinished(5000);
     qint64 trashSize = duTrash.readAllStandardOutput().split('\t')[0].toLongLong();
     
-    qint64 totalSize = thumbSize + devSize + trashSize;
+    // 检测 Flatpak 未使用的运行时/应用
+    bool hasFlatpak = false;
+    qint64 flatpakSize = 0;
+    QProcess whichFlatpak;
+    whichFlatpak.start("which", QStringList() << "flatpak");
+    whichFlatpak.waitForFinished(3000);
+    if (whichFlatpak.exitCode() == 0) {
+        QProcess flatpakProc;
+        flatpakProc.start("flatpak", QStringList() << "uninstall" << "--unused" << "--dry-run");
+        flatpakProc.waitForFinished(15000);
+        if (flatpakProc.exitCode() == 0) {
+            QByteArray output = flatpakProc.readAllStandardOutput();
+            // 解析 dry-run 输出，提取可释放空间
+            // 输出示例: "Things to uninstall:\n  ...  123.4 MB\n\n... savings of 456.7 MB"
+            QString text = QString::fromUtf8(output);
+            QRegularExpression sizeMatch("savings of ([\\d.]+\\s*[KMGT]?B)");
+            QRegularExpressionMatch match = sizeMatch.match(text);
+            if (match.hasMatch()) {
+                flatpakSize = parseSizeToBytes(match.captured(1));
+            }
+            hasFlatpak = flatpakSize > 0;
+        }
+        LOG_INFO(QString("Flatpak unused check: available=%1, size=%2").arg(hasFlatpak).arg(flatpakSize));
+    }
+    
+    // 检测玲珑运行时缓存
+    bool hasLinglong = false;
+    qint64 linglongSize = 0;
+    QProcess whichLinglong;
+    whichLinglong.start("which", QStringList() << "ll-cli");
+    whichLinglong.waitForFinished(3000);
+    if (whichLinglong.exitCode() == 0) {
+        // ll-cli prune 会清理旧的运行时版本，通过 du 获取 Linglong 数据目录大小来估算
+        QProcess duLinglong;
+        duLinglong.start("du", QStringList() << "-sb" << home + "/.linglong/data/org.deepin.runtime");
+        duLinglong.waitForFinished(5000);
+        QByteArray linglongOutput = duLinglong.readAllStandardOutput();
+        if (!linglongOutput.isEmpty()) {
+            linglongSize = linglongOutput.split('\t')[0].toLongLong();
+            hasLinglong = linglongSize > 0;
+        }
+        LOG_INFO(QString("Linglong prune check: available=%1, size=%2").arg(hasLinglong).arg(linglongSize));
+    }
+    
+    qint64 totalSize = thumbSize + devSize + trashSize + flatpakSize + linglongSize;
     QString totalText = formatSize(totalSize);
     
+    // 构建扫描结果消息
     QString message = tr("智能清理扫描结果：\n\n"
         "• 缩略图缓存: %1\n"
         "• 开发工具缓存: %2\n"
-        "• 回收站: %3\n\n"
-        "可释放空间: %4\n\n"
-        "这些项目清理后可自动恢复，不会影响用户数据。\n"
-        "确定要执行清理吗？")
-        .arg(formatSize(thumbSize))
+        "• 回收站: %3").arg(formatSize(thumbSize))
         .arg(formatSize(devSize))
-        .arg(formatSize(trashSize))
-        .arg(totalText);
+        .arg(formatSize(trashSize));
+    
+    if (hasFlatpak) {
+        message += tr("\n• Flatpak 未使用运行时/应用: %1").arg(formatSize(flatpakSize));
+    }
+    if (hasLinglong) {
+        message += tr("\n• 玲珑运行时旧版本缓存: %1").arg(formatSize(linglongSize));
+    }
+    
+    message += tr("\n\n可释放空间: %1\n\n"
+        "这些项目清理后可自动恢复，不会影响用户数据。\n"
+        "确定要执行清理吗？").arg(totalText);
     
     // 确认对话框
     QMessageBox::StandardButton reply = QMessageBox::question(
@@ -616,8 +669,48 @@ void MainWindow::onSmartCleanupClicked()
         m_progressDialog = new ProgressDialog(this);
         m_progressDialog->show();
         
-        // 执行智能清理
+        // 执行智能清理（基础项）
         m_cleaner->smartCleanup();
+        
+        // 清理 Flatpak 未使用的运行时和应用
+        if (hasFlatpak) {
+            m_statusLabel->setText(tr("正在清理 Flatpak 未使用运行时..."));
+            if (m_progressDialog) {
+                m_progressDialog->updateProgress(tr("清理 Flatpak 未使用运行时..."), 90);
+            }
+            QApplication::processEvents();
+            
+            QProcess flatpakClean;
+            flatpakClean.start("flatpak", QStringList() << "uninstall" << "--unused" << "-y");
+            flatpakClean.waitForFinished(120000);
+            
+            if (flatpakClean.exitCode() == 0) {
+                LOG_INFO("Flatpak unused cleanup completed");
+            } else {
+                QString err = QString::fromUtf8(flatpakClean.readAllStandardError());
+                LOG_ERROR(QString("Flatpak unused cleanup failed: %1").arg(err));
+            }
+        }
+        
+        // 清理玲珑运行时旧版本缓存
+        if (hasLinglong) {
+            m_statusLabel->setText(tr("正在清理玲珑运行时旧版本..."));
+            if (m_progressDialog) {
+                m_progressDialog->updateProgress(tr("清理玲珑运行时旧版本..."), 95);
+            }
+            QApplication::processEvents();
+            
+            QProcess llPrune;
+            llPrune.start("ll-cli", QStringList() << "prune");
+            llPrune.waitForFinished(120000);
+            
+            if (llPrune.exitCode() == 0) {
+                LOG_INFO("Linglong prune completed");
+            } else {
+                QString err = QString::fromUtf8(llPrune.readAllStandardError());
+                LOG_ERROR(QString("Linglong prune failed: %1").arg(err));
+            }
+        }
     } else {
         m_statusLabel->setText(tr("已取消清理"));
     }
@@ -797,13 +890,16 @@ void MainWindow::onAboutClicked()
     // 获取发行版名称
     SystemInfo sysInfo;
     QString distroName = sysInfo.getDistroName();
+    
+    // 获取应用程序版本号
+    QString version = QApplication::applicationVersion();
 
     QMessageBox::about(
         this,
         tr("关于"),
         tr("<h3>磁盘清理工具-%1版</h3>"
-           "<p><b>版本号：</b>v1.1.1</p>"
-           "<p>一个专为 %2 系统设计的磁盘清理工具。</p>"
+           "<p><b>版本号：</b>v%2</p>"
+           "<p>一个专为 %3 系统设计的磁盘清理工具。</p>"
            "<p><b>功能特性：</b></p>"
            "<ul>"
            "<li>磁盘使用分析</li>"
@@ -817,6 +913,7 @@ void MainWindow::onAboutClicked()
            "<p><b>技术栈：</b> C++17 + Qt6</p>"
            "<p align=\"center\">Copyright © 2026 克亮 UOS-AI</p>")
         .arg(distroName)
+        .arg(version)
         .arg(distroName)
     );
 }
@@ -918,14 +1015,33 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
     // 收集成功清理的项目
     QList<ScanResult> cleanedItems;
     
+    // 从配置读取白名单规则
+    Config *config = Config::instance();
+    QStringList keepEmptyDirWhitelist = config->getKeepEmptyDirWhitelist();
+    QStringList fullProtectWhitelist = config->getFullProtectWhitelist();
+    QStringList filePatternWhitelist = config->getFilePatternWhitelist();
+    
+    // 合并系统级白名单
+    keepEmptyDirWhitelist.append(config->getSystemKeepEmptyDirs());
+    fullProtectWhitelist.append(config->getSystemFullProtectDirs());
+    filePatternWhitelist.append(config->getSystemFilePatterns());
+    
+    LOG_INFO(QString("Whitelist loaded - KeepEmpty: %1, FullProtect: %2, FilePatterns: %3")
+        .arg(keepEmptyDirWhitelist.size())
+        .arg(fullProtectWhitelist.size())
+        .arg(filePatternWhitelist.size()));
+    
     // 分离需要权限和不需要权限的操作
     QStringList normalDeletePaths;      // 用户权限可直接删除的路径
     QList<ScanResult> normalItems;      // 对应的扫描结果（用于计算大小）
     QStringList privilegedDeletePaths;  // 需要 root 权限删除的路径
     QList<ScanResult> privilegedItems;  // 对应的扫描结果
     QList<ScanResult> linglongItems;    // 玲珑应用（需要通过 pkexec 卸载）
+    QList<ScanResult> needUndeploy;     // 磐石部署项（需要 undeploy）
     bool needCleanAptCache = false;
     bool needCleanSystemLogs = false;
+    bool needCleanJournal = false;
+    bool needCleanSnapshot = false;
     
     for (const ScanResult &item : items) {
         switch (item.category) {
@@ -934,8 +1050,27 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
             privilegedItems.append(item);
             break;
         case ScanCategory::SYSTEM_LOGS:
+            // 系统日志使用专用选项，应用保留天数规则
+            needCleanSystemLogs = true;
+            privilegedItems.append(item);
+            break;
         case ScanCategory::JOURNAL_LOGS:
+            // Journal日志使用专用选项，应用保留天数规则
+            needCleanJournal = true;
+            privilegedItems.append(item);
+            break;
+        case ScanCategory::IMMUTABLE_SNAPSHOTS:
+            if (item.deployIndex >= 0) {
+                // 部署项：使用 undeploy 删除
+                needUndeploy.append(item);
+            } else {
+                // 快照项（或其他磐石项）：使用专用选项
+                needCleanSnapshot = true;
+                privilegedItems.append(item);
+            }
+            break;
         case ScanCategory::CRASH_REPORTS:
+            // 崩溃报告直接删除
             privilegedDeletePaths.append(item.path);
             privilegedItems.append(item);
             break;
@@ -968,8 +1103,18 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
         }
         QApplication::processEvents();
         
+        // 检查完全保护白名单
+        if (isPathInWhitelist(item.path, fullProtectWhitelist)) {
+            LOG_INFO(QString("Path is in full protect whitelist, skipping: %1").arg(item.path));
+            failCount++;
+            continue;
+        }
+        
         bool success = false;
         qint64 freedSize = 0;
+        
+        // 检查是否在保留空目录白名单中
+        bool shouldKeepEmptyDir = isPathInWhitelist(item.path, keepEmptyDirWhitelist);
         
         switch (item.category) {
         case ScanCategory::TRASH: {
@@ -987,6 +1132,13 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
                 QFileInfoList entries = filesDir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot);
                 for (const QFileInfo &entry : entries) {
                     QString entryPath = entry.absoluteFilePath();
+                    
+                    // 检查文件是否匹配保护模式
+                    if (entry.isFile() && isFileMatchPattern(entry.fileName(), filePatternWhitelist)) {
+                        LOG_INFO(QString("File matches protect pattern, skipping: %1").arg(entryPath));
+                        continue;
+                    }
+                    
                     if (entry.isDir()) {
                         QDir subDir(entryPath);
                         if (!subDir.removeRecursively()) {
@@ -1008,6 +1160,13 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
                 QFileInfoList entries = infoDir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot);
                 for (const QFileInfo &entry : entries) {
                     QString entryPath = entry.absoluteFilePath();
+                    
+                    // 检查文件是否匹配保护模式
+                    if (entry.isFile() && isFileMatchPattern(entry.fileName(), filePatternWhitelist)) {
+                        LOG_INFO(QString("File matches protect pattern, skipping: %1").arg(entryPath));
+                        continue;
+                    }
+                    
                     if (entry.isDir()) {
                         QDir subDir(entryPath);
                         if (!subDir.removeRecursively()) {
@@ -1032,8 +1191,8 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
         case ScanCategory::USER_CACHE:
         case ScanCategory::BROWSER_CACHE:
         case ScanCategory::DEV_CACHE: {
-            // 缓存清理 - 清空目录内容而不是删除目录本身
-            LOG_INFO(QString("Cleaning cache: %1").arg(item.path));
+            // 缓存清理 - 根据白名单决定是清空内容还是删除目录
+            LOG_INFO(QString("Cleaning cache: %1 (keepEmptyDir: %2)").arg(item.path).arg(shouldKeepEmptyDir));
             QDir dir(item.path);
             if (dir.exists()) {
                 freedSize = item.size;
@@ -1041,6 +1200,19 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
                 QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot);
                 for (const QFileInfo &entry : entries) {
                     QString entryPath = entry.absoluteFilePath();
+                    
+                    // 检查完全保护白名单
+                    if (isPathInWhitelist(entryPath, fullProtectWhitelist)) {
+                        LOG_INFO(QString("Path is in full protect whitelist, skipping: %1").arg(entryPath));
+                        continue;
+                    }
+                    
+                    // 检查文件是否匹配保护模式
+                    if (entry.isFile() && isFileMatchPattern(entry.fileName(), filePatternWhitelist)) {
+                        LOG_INFO(QString("File matches protect pattern, skipping: %1").arg(entryPath));
+                        continue;
+                    }
+                    
                     if (entry.isDir()) {
                         QDir subDir(entryPath);
                         if (!subDir.removeRecursively()) {
@@ -1060,8 +1232,8 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
             break;
         }
         case ScanCategory::TEMP_FILES: {
-            // 临时文件清理 - 清空内容
-            LOG_INFO(QString("Cleaning temp files: %1").arg(item.path));
+            // 临时文件清理 - 根据白名单决定是清空内容还是删除目录
+            LOG_INFO(QString("Cleaning temp files: %1 (keepEmptyDir: %2)").arg(item.path).arg(shouldKeepEmptyDir));
             QDir dir(item.path);
             if (dir.exists()) {
                 freedSize = item.size;
@@ -1069,6 +1241,19 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
                 QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot);
                 for (const QFileInfo &entry : entries) {
                     QString entryPath = entry.absoluteFilePath();
+                    
+                    // 检查完全保护白名单
+                    if (isPathInWhitelist(entryPath, fullProtectWhitelist)) {
+                        LOG_INFO(QString("Path is in full protect whitelist, skipping: %1").arg(entryPath));
+                        continue;
+                    }
+                    
+                    // 检查文件是否匹配保护模式
+                    if (entry.isFile() && isFileMatchPattern(entry.fileName(), filePatternWhitelist)) {
+                        LOG_INFO(QString("File matches protect pattern, skipping: %1").arg(entryPath));
+                        continue;
+                    }
+                    
                     if (entry.isDir()) {
                         QDir subDir(entryPath);
                         if (!subDir.removeRecursively()) {
@@ -1088,14 +1273,26 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
             break;
         }
         default: {
-            // 默认：尝试删除路径
-            LOG_INFO(QString("Cleaning: %1").arg(item.path));
+            // 默认：根据白名单决定清理方式
+            LOG_INFO(QString("Cleaning: %1 (keepEmptyDir: %2)").arg(item.path).arg(shouldKeepEmptyDir));
             QFileInfo info(item.path);
             if (info.isDir()) {
-                QDir dir(item.path);
                 freedSize = item.size;
-                success = dir.removeRecursively();
+                if (shouldKeepEmptyDir) {
+                    // 保留空目录，只清理内容
+                    success = cleanDirContent(item.path);
+                } else {
+                    // 完全删除目录
+                    QDir dir(item.path);
+                    success = dir.removeRecursively();
+                }
             } else if (info.isFile()) {
+                // 检查文件是否匹配保护模式
+                if (isFileMatchPattern(info.fileName(), filePatternWhitelist)) {
+                    LOG_INFO(QString("File matches protect pattern, skipping: %1").arg(item.path));
+                    failCount++;
+                    continue;
+                }
                 freedSize = item.size;
                 success = QFile::remove(item.path);
             } else {
@@ -1134,18 +1331,6 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
         int keepDays = config->getJournalKeepDays();
         int keepCount = config->getSnapshotKeepCount();
         
-        // 判断是否需要清理 journal 日志或系统快照
-        bool needCleanJournal = false;
-        bool needCleanSnapshot = false;
-        for (const ScanResult &item : privilegedItems) {
-            if (item.category == ScanCategory::JOURNAL_LOGS) {
-                needCleanJournal = true;
-            }
-            if (item.category == ScanCategory::IMMUTABLE_SNAPSHOTS) {
-                needCleanSnapshot = true;
-            }
-        }
-        
         QStringList pkexecArgs;
         pkexecArgs << helperPath;
         
@@ -1155,15 +1340,38 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
         
         if (needCleanAptCache) {
             pkexecArgs << "--apt-cache";
+            LOG_INFO("Will clean APT cache");
         }
         if (needCleanSystemLogs) {
             pkexecArgs << "--system-logs";
+            // 将保留空目录白名单传递给 helper（系统级+用户级合并）
+            if (!keepEmptyDirWhitelist.isEmpty()) {
+                pkexecArgs << "--keep-empty-dirs" << keepEmptyDirWhitelist.join(",");
+                LOG_INFO(QString("Will clean system logs (keep %1 days), whitelist dirs: %2")
+                    .arg(keepDays).arg(keepEmptyDirWhitelist.size()));
+            } else {
+                LOG_INFO(QString("Will clean system logs (keep %1 days), no whitelist").arg(keepDays));
+            }
         }
         if (needCleanJournal) {
             pkexecArgs << "--journal";
+            LOG_INFO(QString("Will clean journal logs (keep %1 days)").arg(keepDays));
         }
         if (needCleanSnapshot) {
             pkexecArgs << "--snapshot";
+            LOG_INFO(QString("Will clean snapshots (keep %1 snapshots)").arg(keepCount));
+        }
+        
+        // 添加部署卸载参数
+        if (!needUndeploy.isEmpty()) {
+            for (const ScanResult &depItem : needUndeploy) {
+                pkexecArgs << "--undeploy" << QString::number(depItem.deployIndex);
+                LOG_INFO(QString("Will undeploy deployment #%1").arg(depItem.deployIndex));
+            }
+            // 将部署项也加入 privilegedItems 以便统计释放空间
+            for (const ScanResult &depItem : needUndeploy) {
+                privilegedItems.append(depItem);
+            }
         }
         
         // 收集需要删除的路径（排除 journal 和 snapshot 类型，它们通过专用选项处理）
@@ -1293,32 +1501,97 @@ void MainWindow::performAnalyzeCleanup(const QList<ScanResult> &items)
     QMessageBox::information(this, tr("清理完成"), resultText);
 }
 
+// 检查路径是否在白名单中（支持精确匹配和前缀匹配）
+bool MainWindow::isPathInWhitelist(const QString &path, const QStringList &whitelist)
+{
+    for (const QString &whitelistPath : whitelist) {
+        // 精确匹配
+        if (path == whitelistPath) {
+            return true;
+        }
+        // 前缀匹配（路径包含关系）
+        if (path.startsWith(whitelistPath + "/")) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 检查文件名是否匹配保护模式（支持通配符）
+bool MainWindow::isFileMatchPattern(const QString &fileName, const QStringList &patterns)
+{
+    for (const QString &pattern : patterns) {
+        // 使用QRegularExpression进行通配符匹配
+        QString regexPattern = QRegularExpression::wildcardToRegularExpression(pattern);
+        QRegularExpression regex(regexPattern);
+        if (regex.match(fileName).hasMatch()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 清理目录内容但保留目录结构
+bool MainWindow::cleanDirContent(const QString &dirPath)
+{
+    QDir dir(dirPath);
+    if (!dir.exists()) {
+        return true;  // 目录不存在，无需清理
+    }
+    
+    bool success = true;
+    QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot);
+    for (const QFileInfo &entry : entries) {
+        QString entryPath = entry.absoluteFilePath();
+        if (entry.isDir()) {
+            QDir subDir(entryPath);
+            if (!subDir.removeRecursively()) {
+                LOG_ERROR(QString("Failed to remove dir: %1").arg(entryPath));
+                success = false;
+            }
+        } else {
+            if (!QFile::remove(entryPath)) {
+                LOG_ERROR(QString("Failed to remove file: %1").arg(entryPath));
+                success = false;
+            }
+        }
+    }
+    return success;
+}
+
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     LOG_INFO("Main window closing");
     
     // 如果允许关闭（从托盘退出），则正常关闭
     if (m_canClose) {
-        // 保存配置
         Config::instance()->save();
         QMainWindow::closeEvent(event);
         return;
     }
     
-    // 否则最小化到托盘
-    event->ignore();
-    hide();
-    
-    // 首次最小化时显示提示
-    static bool firstTime = true;
-    if (firstTime && m_trayIcon) {
-        m_trayIcon->showMessage(
-            tr("磁盘清理工具"),
-            tr("程序已最小化到系统托盘，点击图标可恢复窗口"),
-            QSystemTrayIcon::Information,
-            2000
-        );
-        firstTime = false;
+    // 根据用户配置决定关闭行为
+    int closeAction = Config::instance()->getCloseAction();
+    if (closeAction == 1) {
+        // 最小化到系统托盘
+        event->ignore();
+        hide();
+        
+        // 首次最小化时显示提示
+        static bool firstTime = true;
+        if (firstTime && m_trayIcon) {
+            m_trayIcon->showMessage(
+                tr("磁盘清理工具"),
+                tr("程序已最小化到系统托盘，点击图标可恢复窗口"),
+                QSystemTrayIcon::Information,
+                2000
+            );
+            firstTime = false;
+        }
+    } else {
+        // 直接退出程序
+        Config::instance()->save();
+        QMainWindow::closeEvent(event);
     }
 }
 
@@ -1617,6 +1890,24 @@ QString MainWindow::formatSize(qint64 bytes)
     } else {
         return QString("%1 B").arg(bytes);
     }
+}
+
+qint64 MainWindow::parseSizeToBytes(const QString &sizeStr)
+{
+    // 解析 "123.4 MB"、"567 KB"、"1.2 GB" 等格式
+    QString s = sizeStr.trimmed();
+    QRegularExpression re("^([\\d.]+)\\s*(B|KB|MB|GB|TB)?$");
+    QRegularExpressionMatch match = re.match(s);
+    if (!match.hasMatch()) return 0;
+    
+    double value = match.captured(1).toDouble();
+    QString unit = match.captured(2).toUpper();
+    
+    if (unit == "TB") return static_cast<qint64>(value * 1024 * 1024 * 1024 * 1024);
+    if (unit == "GB") return static_cast<qint64>(value * 1024 * 1024 * 1024);
+    if (unit == "MB") return static_cast<qint64>(value * 1024 * 1024);
+    if (unit == "KB") return static_cast<qint64>(value * 1024);
+    return static_cast<qint64>(value);
 }
 
 #ifdef HAVE_X11

@@ -13,6 +13,8 @@
 #include <QLineEdit>
 #include <QSpinBox>
 #include <QCheckBox>
+#include <QRadioButton>
+#include <QButtonGroup>
 #include <QLabel>
 #include <QGroupBox>
 #include <QFileDialog>
@@ -66,6 +68,9 @@ private:
     QSpinBox *m_journalMaxSizeSpin;
     QSpinBox *m_snapshotKeepCountSpin;
     QCheckBox *m_confirmBeforeCleanupCheck;
+    QButtonGroup *m_closeActionGroup;
+    QRadioButton *m_closeQuitRadio;
+    QRadioButton *m_closeMinimizeRadio;
 
     
     // 按钮

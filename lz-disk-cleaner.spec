@@ -13,7 +13,7 @@
 # published by the Open Source Initiative.
 
 Name:           lz-disk-cleaner
-Version:        1.1.1
+Version:        1.3.0
 Release:        1
 Summary:        Disk cleaning and optimization tool for Linux
 

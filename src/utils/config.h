@@ -45,6 +45,10 @@ public:
     
     int getRefreshInterval() const;
     void setRefreshInterval(int seconds);
+
+    // 关闭行为设置 (0=退出程序, 1=最小化到系统托盘)
+    int getCloseAction() const;
+    void setCloseAction(int action);
     
     // 白名单设置 - 保留空目录（清理内容但保留目录结构）
     QStringList getKeepEmptyDirWhitelist() const;
