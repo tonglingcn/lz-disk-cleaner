@@ -2,7 +2,7 @@
 
 ## 项目信息
 - 项目名称: lz-disk-cleaner
-- 版本: 1.2.0
+- 版本: 1.3.0
 - 源码地址: https://github.com/tonglingcn/lz-disk-cleaner
 
 ## 支持的发行版
@@ -62,16 +62,16 @@ osc mkpac home:你的用户名:lz-disk-cleaner lz-disk-cleaner
 cd /path/to/obs/home:你的用户名:lz-disk-cleaner/lz-disk-cleaner
 
 # 复制必要文件
-cp /home/deepin/Documents/lz-disk-cleaner_1.1.1.orig.tar.gz .
-cp /home/deepin/Documents/deepin-disk-cleaner/lz-disk-cleaner.spec .
-cp /home/deepin/Documents/deepin-disk-cleaner/_service .
+cp /home/deepin/Documents/lz-disk-cleaner_1.3.0.orig.tar.gz .
+cp /home/deepin/Documents/lz-disk-cleaner/lz-disk-cleaner.spec .
+cp /home/deepin/Documents/lz-disk-cleaner/_service .
 
 # 复制 debian 目录 (用于 Deb系构建)
-cp -r /home/deepin/Documents/deepin-disk-cleaner/debian .
+cp -r /home/deepin/Documents/lz-disk-cleaner/debian .
 
 # 添加并提交文件
 osc addremove
-osc commit -m "Initial import v1.1.1"
+osc commit -m "Update v1.3.0"
 ```
 
 ### 5. 配置构建目标
@@ -89,7 +89,7 @@ osc commit -m "Initial import v1.1.1"
 
 | 文件 | 用途 |
 |------|------|
-| lz-disk-cleaner_1.1.1.orig.tar.gz | 源码压缩包 |
+| lz-disk-cleaner_1.3.0.orig.tar.gz | 源码压缩包 |
 | lz-disk-cleaner.spec | RPM 构建规范 |
 | debian/* | Debian 包构建文件 |
 | _service | OBS 服务配置 (可选) |
@@ -99,6 +99,7 @@ osc commit -m "Initial import v1.1.1"
 1. Qt6 版本要求 >= 6.4，部分旧发行版可能不支持
 2. 对于 Qt5 系统 (如 UOS)，需要修改 CMakeLists.txt 添加 Qt5 支持
 3. polkit 策略文件需要根据发行版调整路径
+4. debian/rules 已设置 DEBIAN_FRONTEND=noninteractive 防止构建卡住
 
 ## Debian 包构建依赖
 

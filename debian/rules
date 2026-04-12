@@ -7,6 +7,9 @@
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 export QT_SELECT := qt6
 
+# 非交互式模式：防止 OBS 构建环境中的 dpkg 配置文件提示卡住
+export DEBIAN_FRONTEND = noninteractive
+
 # 获取并行编译数
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
     NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))

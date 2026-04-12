@@ -19,9 +19,9 @@ Build-Depends: cmake (>= 3.16),
                pkg-config,
                g++ (>= 4:12)
 Standards-Version: 4.6.2
-Homepage: https://github.com/tonglingcn/deepin-disk-cleaner
-Vcs-Git: https://github.com/tonglingcn/deepin-disk-cleaner.git
-Vcs-Browser: https://github.com/tonglingcn/deepin-disk-cleaner
+Homepage: https://github.com/tonglingcn/lz-disk-cleaner
+Vcs-Git: https://github.com/tonglingcn/lz-disk-cleaner.git
+Vcs-Browser: https://github.com/tonglingcn/lz-disk-cleaner
 
 Package: lz-disk-cleaner
 Architecture: any
