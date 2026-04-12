@@ -70,10 +70,6 @@ private slots:
     void updateDiskInfo();
     void updateDiskStructure();
     void updateTemperatures();
-    
-    // 磁盘详情
-    void onDiskInfoCellDoubleClicked(int row, int column);
-    void onDiskStructureCellDoubleClicked(int row, int column);
 
 private:
     void initUI();
@@ -89,10 +85,6 @@ private:
     QString formatSize(qint64 bytes, bool withUnit = true) const;
     QString formatSpeed(qint64 bytesPerSec) const;
     bool isDarkTheme();
-
-    // 磁盘分区详情
-    void showDiskDetailDialog(const QString &mountPath, const QString &title);
-    QList<QPair<QString, qint64>> scanDirectorySizes(const QString &dirPath, int maxDepth = 2);
 
 private:
     // 定时器
